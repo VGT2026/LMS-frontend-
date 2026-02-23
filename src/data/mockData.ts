@@ -3,26 +3,70 @@ export interface JobRole {
   title: string;
   description: string;
   roadmap: string[]; // sequence of course IDs
+  salaryRange: string;
+  demand: string;
+  growth: string;
+  milestones: { title: string; description: string; reqCourses: number }[];
+  skills: { name: string; progress: number }[];
 }
 
 export const jobRoles: JobRole[] = [
   {
     id: "jr1",
     title: "Full Stack Developer",
-    description: "Build complete web applications from front to back.",
-    roadmap: ["1", "ic2", "4", "ic3"] // React, TS, AWS, System Design
+    description: "Build complete web applications from front to back. Master both client-side and server-side technologies.",
+    roadmap: ["1", "ic2", "4", "ic3"], // React, TS, AWS, System Design
+    salaryRange: "$115k - $160k",
+    demand: "Very High",
+    growth: "+22% YoY",
+    milestones: [
+      { title: "Frontend Expert", description: "Master React patterns and TypeScript.", reqCourses: 2 },
+      { title: "Cloud Integration", description: "Deploy scalable apps on AWS.", reqCourses: 3 },
+      { title: "Senior Architect", description: "Design complex systems for scale.", reqCourses: 4 }
+    ],
+    skills: [
+      { name: "React System Design", progress: 85 },
+      { name: "Cloud Infrastructure", progress: 40 },
+      { name: "Team Leadership", progress: 25 },
+    ]
   },
   {
     id: "jr2",
     title: "Data Scientist",
-    description: "Analyze complex data to help organizations make decisions.",
-    roadmap: ["2", "ic3", "5"]
+    description: "Analyze complex data to help organizations make decisions. Deep dive into ML, AI, and big data analysis.",
+    roadmap: ["2", "ic3", "5"],
+    salaryRange: "$130k - $185k",
+    demand: "High",
+    growth: "+35% YoY",
+    milestones: [
+      { title: "Data Analyst", description: "Foundation in statistics and Python.", reqCourses: 1 },
+      { title: "ML Practitioner", description: "Implement machine learning models.", reqCourses: 2 },
+      { title: "AI Research Lead", description: "Pioneer new AI applications.", reqCourses: 3 }
+    ],
+    skills: [
+      { name: "Python Modeling", progress: 75 },
+      { name: "Advanced Statistics", progress: 60 },
+      { name: "MLOps", progress: 30 },
+    ]
   },
   {
     id: "jr3",
     title: "Cloud Architect",
-    description: "Design and manage cloud-based systems and infrastructure.",
-    roadmap: ["4", "ic3", "6"]
+    description: "Design and manage cloud-based systems and infrastructure. Build resilient and cost-effective solutions.",
+    roadmap: ["4", "ic3", "6"],
+    salaryRange: "$145k - $210k",
+    demand: "Critical",
+    growth: "+28% YoY",
+    milestones: [
+      { title: "Cloud Associate", description: "AWS/Azure/GCP fundamentals.", reqCourses: 1 },
+      { title: "Infrastructure Lead", description: "Expertise in networking and security.", reqCourses: 2 },
+      { title: "Principal Architect", description: "Global scale cloud transformation.", reqCourses: 3 }
+    ],
+    skills: [
+      { name: "Kubernetes/Docker", progress: 90 },
+      { name: "SecOps", progress: 55 },
+      { name: "Cost Optimization", progress: 80 },
+    ]
   }
 ];
 

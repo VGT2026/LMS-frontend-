@@ -55,10 +55,7 @@ export const RoadmapProgress = ({ user }: RoadmapProgressProps) => {
                             )}
                             <div className="min-w-0">
                                 <p className={`text-xs font-medium truncate ${isCompleted ? "text-muted-foreground line-through" : "text-foreground"}`}>
-                                    {course.id === "1" ? "Advanced React Patterns" : // Fallback for course titles if not found
-                                        course.id === "ic2" ? "Full-Stack TypeScript" :
-                                            course.id === "4" ? "Cloud Architecture with AWS" :
-                                                course.id === "ic3" ? "System Design Fundamentals" : (course as any).title}
+                                    {(course as any).title}
                                 </p>
                                 {isNext && <span className="text-[10px] text-primary font-bold uppercase tracking-tighter">Recommended Next</span>}
                             </div>

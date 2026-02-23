@@ -17,6 +17,7 @@ interface AuthContextType {
   user: User | null;
   login: (email: string, password: string, role: UserRole) => boolean;
   logout: () => void;
+  updateUser: (updates: Partial<User>) => void;
   isAuthenticated: boolean;
 }
 
@@ -25,10 +26,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const STORAGE_KEY = "teachsmart_user";
 
 const mockUsers: Record<UserRole, User> = {
-  student: { 
-    id: "1", 
-    name: "Alex Johnson", 
-    email: "alex@lmspro.com", 
+  student: {
+    id: "1",
+    name: "Alex Johnson",
+    email: "alex@lmspro.com",
     role: "student",
     preferredCategories: ["Development", "Cloud"],
     completedCourseIds: ["1"], // Advanced React Patterns
@@ -69,8 +70,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = () => setUser(null);
 
+  const updateUser = (updates: Partial<User>) => {
+    if (user) {
+      setUser({ ...user, ...updates });
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );
