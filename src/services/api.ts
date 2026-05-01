@@ -5,7 +5,11 @@
 function getApiBaseUrl(): string {
   const raw = import.meta.env.VITE_API_URL?.trim();
   if (!raw) {
-    return import.meta.env.DEV ? "/api" : "/api";
+    if (import.meta.env.DEV) {
+      return "/api";
+    } else {
+      throw new Error("VITE_API_URL must be set in production environment");
+    }
   }
   const base = raw.replace(/\/$/, "");
   if (base.endsWith("/api")) return base;
