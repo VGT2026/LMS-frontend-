@@ -346,21 +346,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const register = async (name: string, email: string, password: string, confirmPassword: string): Promise<{ success: boolean; message?: string; user?: User }> => {
     setAuthLoading(true);
     try {
-      if (isFirebaseConfigured && auth) {
-        if (password !== confirmPassword) return { success: false, message: 'Passwords do not match' };
-        if (password.length < 6) return { success: false, message: 'Password must be at least 6 characters' };
-        pendingFirebaseSyncOverridesRef.current = {
-          email: email.trim().toLowerCase(),
-          remember: true,
-          name: name.trim() || undefined,
-          password,
-          createdAt: Date.now(),
-        };
-        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-        const synced = await syncFirebaseUserToBackend(cred.user, true, name.trim() || undefined, password);
-        if (synced) return { success: true, user: synced };
-        return { success: false, message: lastFirebaseSyncErrorRef.current || 'Registration failed' };
-      }
+      if (password !== confirmPassword) return { success: false, message: 'Passwords do not match' };
+      if (password.length < 6) return { success: false, message: 'Password must be at least 6 characters' };
 
       const response = await authAPI.register(name, email, password, confirmPassword);
       const data = response?.data ?? response;
@@ -373,8 +360,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { success: false, message: response?.message || 'Registration failed' };
     } catch (error: any) {
       const msg = error?.message || 'Registration failed. Please try again.';
-      if (typeof msg === 'string' && msg.includes('auth/email-already-in-use')) {
-        return { success: false, message: 'An account with this email already exists' };
+      if (typeof msg === 'string') {
+        if (msg.includes('auth/email-already-in-use') || msg.includes('User with this email already exists')) {
+          return { success: false, message: 'An account with this email already exists' };
+        }
+        if (msg.includes('auth/unauthorized-domain') || msg.includes('unauthorized-domain')) {
+          return { success: false, message: 'Unauthorized Firebase domain. Add your site to Firebase Auth authorized domains.' };
+        }
       }
       return { success: false, message: msg };
     } finally {
