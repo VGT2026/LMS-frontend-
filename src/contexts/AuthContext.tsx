@@ -263,7 +263,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const API_URL = (() => {
     const raw = import.meta.env.VITE_API_URL?.trim();
-    if (!raw) return import.meta.env.DEV ? "/api" : "http://localhost:3001/api";
+    if (!raw) return import.meta.env.DEV ? "/api" : "/api";
     const base = raw.replace(/\/$/, "");
     if (base.endsWith("/api")) return base;
     // If it's an origin like "http://localhost:3001", append "/api"

@@ -5,7 +5,7 @@
 function getApiBaseUrl(): string {
   const raw = import.meta.env.VITE_API_URL?.trim();
   if (!raw) {
-    return import.meta.env.DEV ? "/api" : "http://localhost:3001/api";
+    return import.meta.env.DEV ? "/api" : "/api";
   }
   const base = raw.replace(/\/$/, "");
   if (base.endsWith("/api")) return base;
