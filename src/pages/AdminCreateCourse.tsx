@@ -42,10 +42,14 @@ const AdminCreateCoursePage = () => {
                 const list = response?.data ?? [];
                 const active = Array.isArray(list) ? list.filter((i: Instructor) => i.is_active !== false) : [];
                 setInstructors(active);
-            } catch (error) {
+            } catch (error: any) {
                 console.error('Failed to fetch instructors:', error);
                 setInstructors([]);
-                toast({ title: "Error", description: "Failed to load instructors. Ensure you're logged in as admin.", variant: "destructive" });
+                toast({
+                    title: "Error",
+                    description: error?.message || "Failed to load instructors. Ensure you're logged in as admin.",
+                    variant: "destructive",
+                });
             } finally {
                 setLoadingInstructors(false);
             }
