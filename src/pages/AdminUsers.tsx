@@ -171,10 +171,11 @@ const AdminUsersPage = () => {
                 throw new Error(response.message || "Failed to create instructor");
             }
 
-        } catch (error) {
+        } catch (error: any) {
+            console.error('Instructor creation error:', error);
             toast({
                 title: "Error",
-                description: "Failed to create instructor account.",
+                description: error?.message || "Failed to create instructor account.",
                 variant: "destructive",
             });
         } finally {
