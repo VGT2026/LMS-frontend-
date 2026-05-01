@@ -295,7 +295,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // If backend says this user is Firebase-only, fallback to Firebase auth.
       const msg = (data?.message || "").toString();
-      if (isFirebaseConfigured && auth && msg.toLowerCase().includes("use firebase sign-in")) {
+      if (isFirebaseConfigured && auth && msg.toLowerCase().includes("firebase")) {
         pendingFirebaseSyncOverridesRef.current = {
           email: email.trim().toLowerCase(),
           remember: rememberMe,
