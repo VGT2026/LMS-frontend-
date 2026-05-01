@@ -296,6 +296,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // If backend says this user is Firebase-only, fallback to Firebase auth.
       const msg = (data?.message || "").toString();
       if (isFirebaseConfigured && auth && msg.toLowerCase().includes("firebase")) {
+        console.log('Attempting Firebase login fallback for:', email);
         pendingFirebaseSyncOverridesRef.current = {
           email: email.trim().toLowerCase(),
           remember: rememberMe,
@@ -308,6 +309,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { success: false, message: lastFirebaseSyncErrorRef.current || "Login failed" };
       }
 
+      console.warn('Login failed:', { status: response.status, data });
       return { success: false, message: data.message || "Invalid credentials" };
     } catch (error: any) {
       const code = error?.code || '';
