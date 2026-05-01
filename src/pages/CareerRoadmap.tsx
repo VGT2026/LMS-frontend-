@@ -4,7 +4,6 @@ import {
     Target,
     Map as MapIcon,
     CheckCircle2,
-    Circle,
     Lock,
     ArrowRight,
     Award,
@@ -20,12 +19,12 @@ import {
     MessageSquare,
     RefreshCw,
     X,
-    Filter,
     Search,
     Zap
 } from "lucide-react";
 import { jobRoles, courses } from "@/data/mockData";
 import { useAuth } from "@/contexts/AuthContext";
+import { authAPI, aiAPI } from "@/services/api";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -54,6 +53,14 @@ const CareerRoadmap = () => {
     const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
     const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null);
 
+    const selectRole = (roleId: string) => {
+        updateUser({ targetJobRoleId: roleId });
+        authAPI.updateProfile({ targetJobRoleId: roleId }).catch((err) => {
+            console.error('Failed to save career role:', err);
+            toast({ title: 'Save failed', description: 'Could not save your career selection. Please try again.', variant: 'destructive' });
+        });
+    };
+
     if (!user || !user.targetJobRoleId) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-gradient-to-b from-background to-muted/20 rounded-3xl border border-dashed border-border">
@@ -68,7 +75,7 @@ const CareerRoadmap = () => {
                     {jobRoles.map(role => (
                         <button
                             key={role.id}
-                            onClick={() => updateUser({ targetJobRoleId: role.id })}
+                            onClick={() => selectRole(role.id)}
                             className="p-6 rounded-2xl border border-border bg-card hover:border-primary hover:bg-primary/5 transition-all text-left group"
                         >
                             <div className="flex items-center justify-between mb-3">
@@ -112,7 +119,7 @@ const CareerRoadmap = () => {
     const coursesToMilestone = Math.max(0, nextMilestone.reqCourses - completedCount);
 
     const handleRoleChange = (roleId: string) => {
-        updateUser({ targetJobRoleId: roleId });
+        selectRole(roleId);
         setIsRoleDialogOpen(false);
         setAiTip(null);
         setAiAnalysisResult(null);
@@ -122,19 +129,23 @@ const CareerRoadmap = () => {
         });
     };
 
-    const runAIAnalysis = () => {
+    const runAIAnalysis = async () => {
         setIsAILoading(true);
-        setTimeout(() => {
-            const tips = [
-                `Based on your high performance in ${roadmapCourses.find(c => completedIds.includes(c.id))?.title || "foundational courses"}, you should skip the basic track and jump into ${roadmapCourses.find(c => !completedIds.includes(c.id))?.title || "advanced modules"}.`,
-                `AI predicts you will complete this path 20% faster than average if you maintain your current daily streak.`,
-                `Market volatility in the TMT sector suggests you prioritize ${jobRole.skills[0].name} to ensure career resilience.`,
-                `Compared to 5,000 top ${jobRole.title}s, your skill profile is 85% aligned. Focus on ${jobRole.skills[1].name} to break into the top 5%.`
-            ];
-            setAiTip(tips[Math.floor(Math.random() * tips.length)]);
-            setAiAnalysisResult("Analysis complete! Check your updated recommendations below.");
+        setAiTip(null);
+        try {
+            const nextCourse = roadmapCourses.find(c => !completedIds.includes(c.id));
+            const completedNames = roadmapCourses.filter(c => completedIds.includes(c.id)).map(c => c.title).join(', ') || 'none yet';
+            const prompt = `As a career coach, give me one specific, actionable tip (1-2 sentences) for someone pursuing ${jobRole.title} who is ${progress}% through their roadmap (${completedCount} of ${jobRole.roadmap.length} modules done). Completed: ${completedNames}. Next module: ${nextCourse?.title || 'all complete'}. Top skill gap: ${jobRole.skills.slice().sort((a, b) => a.progress - b.progress)[0]?.name}.`;
+            const result = await aiAPI.askTutor(prompt);
+            const tip = result?.answer || result?.data?.answer || result;
+            setAiTip(typeof tip === 'string' ? tip : 'Focus on your next module to maintain momentum on your career path.');
+            setAiAnalysisResult('Analysis complete! Check your updated recommendations below.');
+        } catch {
+            setAiTip('Focus on consistent daily progress — completing one module per week puts you on track to reach your goal within the estimated timeframe.');
+            setAiAnalysisResult('Analysis complete!');
+        } finally {
             setIsAILoading(false);
-        }, 1500);
+        }
     };
 
     const container = {

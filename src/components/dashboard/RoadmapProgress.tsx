@@ -8,30 +8,37 @@ import { Progress } from "@/components/ui/progress";
 
 interface RoadmapProgressProps {
     user: User | null;
+    courses?: Array<{ id: number | string; title: string }>;
 }
 
 const fadeUp = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
-export const RoadmapProgress = ({ user }: RoadmapProgressProps) => {
+export const RoadmapProgress = ({ user, courses: propCourses }: RoadmapProgressProps) => {
     if (!user || !user.targetJobRoleId) return null;
 
-    const jobRole = jobRoles.find(jr => jr.id === user.targetJobRoleId);
+    // Support both mock IDs (jr1, jr2) and numeric DB IDs (1, 2) -> map to mock for display
+    const idMatch = user.targetJobRoleId;
+    const jobRole = jobRoles.find(jr => jr.id === idMatch)
+        ?? jobRoles.find(jr => jr.id === `jr${idMatch}`)
+        ?? (idMatch === "1" ? jobRoles[0] : idMatch === "2" ? jobRoles[1] : idMatch === "3" ? jobRoles[2] : null);
     if (!jobRole) return null;
 
-    const roadmapCourseIds = jobRole.roadmap;
+    const roadmapCourseIds = jobRole.roadmap || [];
     const completedIds = user.completedCourseIds || [];
+    const courseList = Array.isArray(propCourses) && propCourses.length > 0 ? propCourses : courses;
 
     const roadmapCourses = roadmapCourseIds.map(id => {
-        const found = courses.find(c => c.id === id);
+        const strId = String(id);
+        const found = courseList.find((c: any) => String(c.id) === strId);
         return found ? {
             id: found.id,
             title: found.title,
-            completed: completedIds.includes(found.id)
-        } : { id, title: "Specialized Module", completed: false };
+            completed: completedIds.includes(strId) || completedIds.includes(String(found.id))
+        } : { id, title: "Course in path", completed: false };
     });
 
-    const completedCount = roadmapCourseIds.filter(id => completedIds.includes(id)).length;
-    const progress = Math.round((completedCount / roadmapCourseIds.length) * 100);
+    const completedCount = roadmapCourseIds.filter(id => completedIds.includes(id) || completedIds.includes(String(id))).length;
+    const progress = roadmapCourseIds.length > 0 ? Math.round((completedCount / roadmapCourseIds.length) * 100) : 0;
 
     return (
         <motion.div variants={fadeUp} className="bg-[#121214] rounded-2xl p-6 border border-white/5 shadow-2xl space-y-5 relative overflow-hidden group">
@@ -62,8 +69,9 @@ export const RoadmapProgress = ({ user }: RoadmapProgressProps) => {
 
             <div className="space-y-2.5 pt-2">
                 {roadmapCourses.slice(0, 3).map((course, index) => {
-                    const isCompleted = completedIds.includes(course.id);
-                    const isNext = !isCompleted && (index === 0 || completedIds.includes(roadmapCourses[index - 1].id));
+                    const isCompleted = completedIds.includes(String(course.id));
+                    const prevCourse = index > 0 ? roadmapCourses[index - 1] : null;
+                    const isNext = !isCompleted && (index === 0 || (prevCourse && completedIds.includes(String(prevCourse.id))));
 
                     return (
                         <div key={course.id} className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${isNext ? "bg-white/5 border border-primary/20 shadow-lg" : "bg-transparent opacity-60"}`}>

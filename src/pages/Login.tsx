@@ -1,44 +1,26 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth, UserRole } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { GraduationCap, Eye, EyeOff, ArrowLeft, CheckCircle, Mail } from "lucide-react";
+import { GraduationCap, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("student");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => {
+    try { return localStorage.getItem("lms_remember") !== "0"; } catch { return true; }
+  });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [forgotOpen, setForgotOpen] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
-  const [resetSent, setResetSent] = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleForgotPassword = () => {
-    if (!resetEmail) return;
-    setResetLoading(true);
-    setTimeout(() => {
-      setResetLoading(false);
-      setResetSent(true);
-    }, 1200);
-  };
-
-  const closeForgot = () => {
-    setForgotOpen(false);
-    setResetEmail("");
-    setResetSent(false);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!email || !password) {
@@ -46,15 +28,22 @@ const Login = () => {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      const success = login(email, password, role);
-      if (success) {
-        navigate(role === "admin" ? "/admin" : role === "instructor" ? "/instructor" : "/dashboard");
+
+    try {
+      const result = await login(email, password, rememberMe);
+      if (result.success && result.user) {
+        // Navigate based on actual user role from database
+        navigate(result.user.role === "admin" ? "/admin" :
+                result.user.role === "instructor" ? "/instructor" : "/dashboard");
       } else {
-        setError("Invalid credentials");
+        setError(result.message || "Invalid credentials");
       }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError("Login failed. Please try again.");
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   return (
@@ -81,27 +70,13 @@ const Login = () => {
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
-              className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+              className="mb-4 p-3 rounded-lg bg-destructive/10  border border-destructive/20 text-destructive text-sm"
             >
               {error}
             </motion.div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="role" className="text-foreground font-medium">Role</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
-                <SelectTrigger className="h-11 bg-card">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="instructor">Instructor</SelectItem>
-                  <SelectItem value="admin">Administrator</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="email" className="text-foreground font-medium">Email</Label>
               <Input
@@ -137,10 +112,14 @@ const Login = () => {
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Checkbox id="remember" />
+                <Checkbox
+                  id="remember"
+                  checked={rememberMe}
+                  onCheckedChange={(c) => setRememberMe(!!c)}
+                />
                 <Label htmlFor="remember" className="text-sm text-muted-foreground cursor-pointer">Remember me</Label>
               </div>
-              <button type="button" onClick={() => setForgotOpen(true)} className="text-sm text-accent hover:underline font-medium">Forgot password?</button>
+              <Link to="/forgot-password" className="text-sm text-accent hover:underline font-medium">Forgot password?</Link>
             </div>
 
             <Button type="submit" className="w-full h-11 text-base font-semibold" disabled={loading}>
@@ -162,44 +141,16 @@ const Login = () => {
             </Link>
           </p>
           <p className="mt-2 text-center text-xs text-muted-foreground">
-            Demo: Enter any email & password with your selected role
+            Admin: admin@lmspro.com / admin123
+          </p>
+          <p className="mt-1 text-center text-xs text-muted-foreground">
+            If login fails, visit{" "}
+            <a href="/api/auth/reset-admin" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+              /api/auth/reset-admin
+            </a>{" "}
+            to reset admin password, then try again.
           </p>
 
-          {/* Forgot Password Modal */}
-          {forgotOpen && (
-            <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-card rounded-xl border border-border shadow-elevated max-w-sm w-full p-6">
-                {resetSent ? (
-                  <div className="text-center space-y-3">
-                    <div className="w-14 h-14 mx-auto rounded-full bg-success/10 flex items-center justify-center">
-                      <CheckCircle className="w-7 h-7 text-success" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-foreground">Check your email</h3>
-                    <p className="text-sm text-muted-foreground">We've sent a password reset link to <span className="font-medium text-foreground">{resetEmail}</span></p>
-                    <Button onClick={closeForgot} className="w-full">Back to Login</Button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <button onClick={closeForgot} className="text-muted-foreground hover:text-foreground transition-colors">
-                      <ArrowLeft className="w-5 h-5" />
-                    </button>
-                    <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center">
-                      <Mail className="w-6 h-6 text-accent" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-foreground">Reset your password</h3>
-                    <p className="text-sm text-muted-foreground">Enter your email and we'll send you a reset link.</p>
-                    <div className="space-y-2">
-                      <Label>Email address</Label>
-                      <Input type="email" placeholder="you@example.com" value={resetEmail} onChange={e => setResetEmail(e.target.value)} className="bg-muted/50" />
-                    </div>
-                    <Button onClick={handleForgotPassword} disabled={!resetEmail || resetLoading} className="w-full">
-                      {resetLoading ? "Sending..." : "Send Reset Link"}
-                    </Button>
-                  </div>
-                )}
-              </motion.div>
-            </div>
-          )}
         </motion.div>
       </div>
 

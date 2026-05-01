@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 import { useAssignments } from "@/contexts/AssignmentContext";
 
 const Assignments = () => {
-  const { assignments } = useAssignments();
+  const { assignments, loading } = useAssignments();
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
@@ -26,7 +26,11 @@ const Assignments = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        {assignments.length === 0 ? (
+        {loading ? (
+          <div className="bg-card rounded-xl p-12 border border-border text-center">
+            <p className="text-muted-foreground">Loading assignments...</p>
+          </div>
+        ) : assignments.length === 0 ? (
           <div className="bg-card rounded-xl p-12 border border-border text-center">
             <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
             <p className="text-lg font-medium text-foreground">No assignments found</p>

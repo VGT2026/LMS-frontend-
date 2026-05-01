@@ -1,60 +1,161 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Award, Download, Eye, X } from "lucide-react";
+import { Award, Download, Eye, X, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { dashboardAPI } from "@/services/api";
+import { jsPDF } from "jspdf";
 
-const certs = [
-  { id: "1", course: "UX Design Masterclass", date: "Jan 15, 2026", instructor: "Lisa Park" },
-  { id: "2", course: "Project Management Professional", date: "Dec 20, 2025", instructor: "Maria Garcia" },
-];
+interface CertItem {
+  id: string;
+  course: string;
+  date: string;
+  instructor: string;
+}
 
 const Certificates = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [preview, setPreview] = useState<string | null>(null);
+  const [certs, setCerts] = useState<CertItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const downloadCertificate = (cert: typeof certs[0]) => {
-    // Generate a text-based certificate and download it
-    const content = `
-╔══════════════════════════════════════════════════════════╗
-║                                                          ║
-║              CERTIFICATE OF COMPLETION                   ║
-║                                                          ║
-║                      LMS Pro                             ║
-║                                                          ║
-║                 This certifies that                      ║
-║                                                          ║
-║              ${(user?.name || "Student").padStart(30).padEnd(40)}  ║
-║                                                          ║
-║          has successfully completed the course            ║
-║                                                          ║
-║       ${cert.course.padStart(35).padEnd(45)}  ║
-║                                                          ║
-║              Date: ${cert.date.padEnd(35)}    ║
-║              Instructor: ${cert.instructor.padEnd(29)}    ║
-║                                                          ║
-╚══════════════════════════════════════════════════════════╝
-`;
-    const blob = new Blob([content], { type: "text/plain" });
+  useEffect(() => {
+    const fetchCertificates = async () => {
+      try {
+        setLoading(true);
+        const res = await dashboardAPI.getEnrolledCourses();
+        const data = res?.data ?? res;
+        const courses = Array.isArray(data) ? data : [];
+        // Only show certificates for fully completed courses (100% progress)
+        const completed = courses.filter(
+          (c: { completed_at?: string | Date | null; progress_percentage?: number }) =>
+            c.completed_at != null || (c.progress_percentage ?? 0) >= 100
+        );
+        const formatted: CertItem[] = completed.map((c: { id: number; title: string; completed_at?: string | Date; enrolled_at?: string | Date; instructor?: string }) => {
+          const date = c.completed_at || c.enrolled_at;
+          const dateStr = date ? new Date(date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "";
+          return {
+            id: String(c.id),
+            course: c.title || "Course",
+            date: dateStr,
+            instructor: c.instructor || "Instructor",
+          };
+        });
+        setCerts(formatted);
+      } catch {
+        setCerts([]);
+        toast({ title: "Could not load certificates", description: "Complete courses to earn certificates.", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCertificates();
+  }, [toast]);
+
+  const downloadCertificate = (cert: CertItem) => {
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const W = doc.internal.pageSize.getWidth();
+    const H = doc.internal.pageSize.getHeight();
+
+    // Background
+    doc.setFillColor(15, 23, 42); // dark navy
+    doc.rect(0, 0, W, H, "F");
+
+    // Gold border (outer)
+    doc.setDrawColor(212, 175, 55);
+    doc.setLineWidth(2);
+    doc.rect(10, 10, W - 20, H - 20);
+
+    // Gold border (inner)
+    doc.setLineWidth(0.5);
+    doc.rect(14, 14, W - 28, H - 28);
+
+    // Header accent line
+    doc.setDrawColor(212, 175, 55);
+    doc.setLineWidth(0.8);
+    doc.line(40, 38, W - 40, 38);
+    doc.line(40, 40, W - 40, 40);
+
+    // "CERTIFICATE OF COMPLETION"
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(212, 175, 55);
+    doc.text("CERTIFICATE OF COMPLETION", W / 2, 32, { align: "center" });
+
+    // "LMS Pro"
+    doc.setFontSize(28);
+    doc.setTextColor(255, 255, 255);
+    doc.text("LMS Pro", W / 2, 58, { align: "center" });
+
+    // "This is to certify that"
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(12);
+    doc.setTextColor(180, 190, 210);
+    doc.text("This is to certify that", W / 2, 74, { align: "center" });
+
+    // Student name
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(26);
+    doc.setTextColor(255, 255, 255);
+    doc.text(user?.name || "Student", W / 2, 90, { align: "center" });
+
+    // Underline below name
+    const nameWidth = doc.getTextWidth(user?.name || "Student");
+    doc.setDrawColor(212, 175, 55);
+    doc.setLineWidth(0.5);
+    doc.line(W / 2 - nameWidth / 2, 93, W / 2 + nameWidth / 2, 93);
+
+    // "has successfully completed"
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(12);
+    doc.setTextColor(180, 190, 210);
+    doc.text("has successfully completed the course", W / 2, 105, { align: "center" });
+
+    // Course name
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.setTextColor(212, 175, 55);
+    doc.text(cert.course, W / 2, 119, { align: "center" });
+
+    // Footer divider
+    doc.setDrawColor(212, 175, 55);
+    doc.setLineWidth(0.8);
+    doc.line(40, 131, W - 40, 131);
+    doc.line(40, 133, W - 40, 133);
+
+    // Date & Instructor
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(180, 190, 210);
+    doc.text(`Date: ${cert.date}`, W / 2 - 50, 143, { align: "center" });
+    doc.text(`Instructor: ${cert.instructor}`, W / 2 + 50, 143, { align: "center" });
+
+    const fileName = `certificate-${cert.course.toLowerCase().replace(/\s+/g, "-")}.pdf`;
+    const blob = doc.output("blob");
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `certificate-${cert.course.toLowerCase().replace(/\s+/g, "-")}.txt`;
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast({ title: "Certificate downloaded", description: `${cert.course} certificate saved.` });
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast({ title: "Certificate downloaded", description: `${cert.course} certificate saved as PDF.` });
   };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-3xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-foreground">My Certificates</h1>
-      <p className="text-muted-foreground">Certificates for completed courses</p>
+      <p className="text-muted-foreground">Download certificates for courses you have completed (100%)</p>
 
-      {certs.length === 0 ? (
+      {loading ? (
+        <div className="bg-card rounded-xl p-12 border border-border shadow-card flex flex-col items-center justify-center gap-3">
+          <Loader2 className="w-10 h-10 text-primary animate-spin" />
+          <p className="text-muted-foreground">Loading certificates...</p>
+        </div>
+      ) : certs.length === 0 ? (
         <div className="bg-card rounded-xl p-12 border border-border shadow-card text-center">
           <Award className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
           <p className="text-muted-foreground">No certificates yet. Complete a course to earn one!</p>

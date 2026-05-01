@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,8 +7,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GraduationCap, Eye, EyeOff, ArrowLeft, CheckCircle, Mail, User, Lock } from "lucide-react";
 import { motion } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
+import { courseAPI } from "@/services/api";
+
+const DEFAULT_CATEGORIES = [
+  "Development", "Data Science", "Design", "Cloud",
+  "AI/ML", "DevOps", "Security", "Business"
+];
 
 const Register = () => {
+  const { register } = useAuth();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -22,12 +30,26 @@ const Register = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const navigate = useNavigate();
 
-  const categories = [
-    "Development", "Data Science", "Design", "Cloud",
-    "AI/ML", "DevOps", "Security", "Business"
-  ];
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await courseAPI.getCategories?.();
+        const fetchedCategories = Array.isArray(response?.data) ? response.data : [];
+        if (fetchedCategories.length > 0) {
+          setCategories(fetchedCategories);
+        } else {
+          setCategories(DEFAULT_CATEGORIES);
+        }
+      } catch (error) {
+        console.error('Failed to fetch categories:', error);
+        setCategories(DEFAULT_CATEGORIES);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   const handleCategoryToggle = (category: string) => {
     setFormData(prev => ({
@@ -38,7 +60,7 @@ const Register = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -53,8 +75,8 @@ const Register = () => {
       return;
     }
 
-    if (formData.password.length < 8) {
-      setError("Password must be at least 8 characters long");
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters long");
       return;
     }
 
@@ -65,14 +87,29 @@ const Register = () => {
 
     setLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const result = await register(
+        formData.name,
+        formData.email,
+        formData.password,
+        formData.confirmPassword
+      );
+
+      if (result.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          navigate(result.user?.role === "admin" ? "/admin" :
+                  result.user?.role === "instructor" ? "/instructor" : "/dashboard", { replace: true });
+        }, 1500);
+      } else {
+        setError(result.message || "Registration failed");
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      setError("Registration failed. Please try again.");
+    } finally {
       setLoading(false);
-      setSuccess(true);
-      setTimeout(() => {
-        navigate("/login");
-      }, 2000);
-    }, 1500);
+    }
   };
 
   if (success) {

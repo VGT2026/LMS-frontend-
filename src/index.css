@@ -105,6 +105,10 @@
     @apply border-border;
   }
 
+  html, body, #root {
+    min-height: 100vh;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, sans-serif;

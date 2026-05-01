@@ -3,10 +3,10 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard, BookOpen, Calendar, MessageSquare, Award, BarChart3,
-  Settings, HelpCircle, GraduationCap, Bell, Search, ChevronDown,
+  Settings, HelpCircle, GraduationCap, Bell, Search, ChevronDown, ChevronRight,
   LogOut, User, Users, PlusCircle, FileText, Menu, X, Bot, Wand2, Sparkles, Map
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 
@@ -34,7 +34,8 @@ const courseSearchData: SearchResult[] = [
 
 const pageSearchData: SearchResult[] = [
   { label: "Dashboard", path: "/dashboard", type: "Page", icon: LayoutDashboard },
-  { label: "My Courses", path: "/courses", type: "Page", icon: BookOpen },
+  { label: "My Courses", path: "/courses/my-enrolled", type: "Page", icon: BookOpen },
+  { label: "All Courses", path: "/courses", type: "Page", icon: BookOpen },
   { label: "Calendar", path: "/calendar", type: "Page", icon: Calendar },
   { label: "Messages", path: "/messages", type: "Page", icon: MessageSquare },
   { label: "Grades", path: "/grades", type: "Page", icon: BarChart3 },
@@ -44,10 +45,22 @@ const pageSearchData: SearchResult[] = [
   { label: "Discussions", path: "/discussions", type: "Page", icon: MessageSquare },
 ];
 
-const studentNav: NavItem[] = [
+interface NavItemWithChildren extends Omit<NavItem, "path"> {
+  path?: string;
+  children?: { label: string; path: string }[];
+}
+
+const studentNavBase: (NavItem | NavItemWithChildren)[] = [
   { label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" />, path: "/dashboard" },
   { label: "Career Roadmap", icon: <Map className="w-5 h-5" />, path: "/roadmap" },
-  { label: "My Courses", icon: <BookOpen className="w-5 h-5" />, path: "/courses" },
+  {
+    label: "Courses",
+    icon: <BookOpen className="w-5 h-5" />,
+    children: [
+      { label: "My Courses", path: "/courses/my-enrolled" },
+      { label: "All Courses", path: "/courses" },
+    ],
+  },
   { label: "Assignments", icon: <FileText className="w-5 h-5" />, path: "/assignments" },
   { label: "AI Tutor", icon: <Bot className="w-5 h-5" />, path: "/ai-tutor" },
   { label: "AI Summarizer", icon: <Sparkles className="w-5 h-5" />, path: "/ai-summarizer" },
@@ -58,23 +71,29 @@ const studentNav: NavItem[] = [
   { label: "Support", icon: <HelpCircle className="w-5 h-5" />, path: "/support" },
 ];
 
+const studentNav = studentNavBase;
+
 const adminNav: NavItem[] = [
   { label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" />, path: "/admin" },
   { label: "Courses", icon: <BookOpen className="w-5 h-5" />, path: "/admin/courses" },
   { label: "Users", icon: <Users className="w-5 h-5" />, path: "/admin/users" },
   { label: "Create Course", icon: <PlusCircle className="w-5 h-5" />, path: "/admin/create-course" },
   { label: "Reports", icon: <FileText className="w-5 h-5" />, path: "/admin/reports" },
+  { label: "Support", icon: <HelpCircle className="w-5 h-5" />, path: "/support" },
   { label: "Settings", icon: <Settings className="w-5 h-5" />, path: "/settings" },
 ];
 
 const instructorNav: NavItem[] = [
   { label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" />, path: "/instructor" },
   { label: "My Courses", icon: <BookOpen className="w-5 h-5" />, path: "/instructor/courses" },
+  { label: "Create Course", icon: <PlusCircle className="w-5 h-5" />, path: "/instructor/create-course" },
   { label: "Students", icon: <Users className="w-5 h-5" />, path: "/instructor/students" },
+  { label: "Messages", icon: <MessageSquare className="w-5 h-5" />, path: "/messages" },
   { label: "Assignments", icon: <FileText className="w-5 h-5" />, path: "/instructor/assignments" },
   { label: "AI Quiz Generator", icon: <Wand2 className="w-5 h-5" />, path: "/instructor/ai-quiz" },
   { label: "AI Summarizer", icon: <Sparkles className="w-5 h-5" />, path: "/ai-summarizer" },
   { label: "Discussions", icon: <MessageSquare className="w-5 h-5" />, path: "/instructor/discussions" },
+  { label: "Support", icon: <HelpCircle className="w-5 h-5" />, path: "/support" },
   { label: "Settings", icon: <Settings className="w-5 h-5" />, path: "/settings" },
 ];
 
@@ -88,8 +107,44 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [coursesDropdownOpen, setCoursesDropdownOpen] = useState(false);
 
   const navItems = user?.role === "admin" ? adminNav : user?.role === "instructor" ? instructorNav : studentNav;
+  const isStudent = user?.role === "student";
+
+  const notificationItems = useMemo(() => {
+    if (!user) return [];
+
+    if (user.role === "admin") {
+      return [
+        { text: "New student support ticket submitted", href: "/support" },
+        { text: "Review pending course approvals", href: "/admin/courses" },
+        { text: "Manage users and roles", href: "/admin/users" },
+      ];
+    }
+
+    if (user.role === "instructor") {
+      return [
+        { text: "Pending grading requests need review", href: "/instructor/assignments" },
+        { text: "New discussion replies on your courses", href: "/instructor/discussions" },
+        { text: "Check upcoming course deadlines", href: "/calendar" },
+      ];
+    }
+
+    return [
+      { text: "New assignment posted in your courses", href: "/assignments" },
+      { text: "Quiz deadline tomorrow", href: "/calendar" },
+      { text: "Certificates are ready for download", href: "/certificates" },
+    ];
+  }, [user]);
+
+  const notificationCount = notificationItems.length;
+
+  useEffect(() => {
+    if (location.pathname === "/courses" || location.pathname === "/courses/my-enrolled") {
+      setCoursesDropdownOpen(true);
+    }
+  }, [location.pathname]);
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -148,11 +203,61 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
         {/* Nav */}
         <nav className="p-3 space-y-1 mt-2">
           {navItems.map((item) => {
-            const active = location.pathname === item.path;
+            const navItem = item as NavItemWithChildren;
+            const hasChildren = isStudent && navItem.children && navItem.children.length > 0;
+            const active = hasChildren
+              ? navItem.children?.some((c) => location.pathname === c.path)
+              : location.pathname === navItem.path;
+
+            if (hasChildren) {
+              return (
+                <div key={navItem.label} className="space-y-0.5">
+                  <button
+                    onClick={() => setCoursesDropdownOpen((o) => !o)}
+                    className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
+                      ${active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"}
+                    `}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="flex-shrink-0">{navItem.icon}</span>
+                      {sidebarOpen && <span>{navItem.label}</span>}
+                    </div>
+                    {sidebarOpen && (
+                      <ChevronRight
+                        className={`w-4 h-4 flex-shrink-0 transition-transform ${coursesDropdownOpen ? "rotate-90" : ""}`}
+                      />
+                    )}
+                  </button>
+                  {sidebarOpen && coursesDropdownOpen && (
+                    <div className="ml-4 pl-4 border-l border-sidebar-border space-y-0.5">
+                      {navItem.children?.map((child) => {
+                        const childActive = location.pathname === child.path;
+                        return (
+                          <Link
+                            key={child.path}
+                            to={child.path}
+                            onClick={() => setMobileOpen(false)}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200 block
+                              ${childActive
+                                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                              }
+                            `}
+                          >
+                            {child.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
             return (
               <Link
-                key={item.path}
-                to={item.path}
+                key={navItem.path}
+                to={navItem.path!}
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
                   ${active
@@ -161,8 +266,8 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
                   }
                 `}
               >
-                <span className="flex-shrink-0">{item.icon}</span>
-                {sidebarOpen && <span>{item.label}</span>}
+                <span className="flex-shrink-0">{navItem.icon}</span>
+                {sidebarOpen && <span>{navItem.label}</span>}
               </Link>
             );
           })}
@@ -222,10 +327,9 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
             <div className="relative">
               <button
                 onClick={() => { setNotifOpen(!notifOpen); setProfileOpen(false); }}
-                className="relative w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <Bell className="w-5 h-5" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent rounded-full" />
               </button>
               <AnimatePresence>
                 {notifOpen && (
@@ -233,14 +337,33 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
                     initial={{ opacity: 0, y: -5 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -5 }}
-                    className="absolute right-0 top-12 w-80 bg-card rounded-xl border border-border shadow-elevated p-4 space-y-3"
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-0 top-12 w-80 bg-card rounded-xl border border-border shadow-elevated p-4"
                   >
-                    <h4 className="font-semibold text-foreground text-sm">Notifications</h4>
-                    {["New assignment posted in React Patterns", "Quiz deadline tomorrow", "Certificate ready for download"].map((n, i) => (
-                      <div key={i} className="text-sm text-muted-foreground p-2 rounded-lg hover:bg-muted cursor-pointer transition-colors">
-                        {n}
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="font-semibold text-foreground text-sm">Notifications</h4>
+                        <span className="text-xs text-muted-foreground">{notificationCount}</span>
                       </div>
-                    ))}
+
+                      {notificationCount === 0 ? (
+                        <div className="text-sm text-muted-foreground mt-3">No notifications</div>
+                      ) : (
+                        <div className="mt-3 space-y-1 max-h-[280px] overflow-y-auto pr-1">
+                          {notificationItems.map((n, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => {
+                                setNotifOpen(false);
+                                navigate(n.href);
+                              }}
+                              className="w-full text-left text-sm text-muted-foreground p-2 rounded-lg hover:bg-muted transition-colors"
+                            >
+                              {n.text}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -287,7 +410,7 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-y-auto" onClick={() => { setProfileOpen(false); setNotifOpen(false); }}>
+        <main className="flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto" onClick={() => { setProfileOpen(false); setNotifOpen(false); }}>
           {children}
         </main>
       </div>

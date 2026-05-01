@@ -1,30 +1,39 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Sparkles, ChevronRight, BookOpen } from "lucide-react";
-import { courses } from "@/data/mockData";
+import { courses as mockCourses } from "@/data/mockData";
 import { User } from "@/contexts/AuthContext";
 
 interface RecommendationSectionProps {
     user: User | null;
+    courses?: any[];
+    enrolledCourses?: Array<{ id?: number; progress_percentage?: number; progress?: number }>;
 }
 
 const fadeUp = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
-export const RecommendationSection = ({ user }: RecommendationSectionProps) => {
+export const RecommendationSection = ({ user, courses: propCourses, enrolledCourses = [] }: RecommendationSectionProps) => {
     if (!user) return null;
 
-    // Simple recommendation logic
+    const courseList = Array.isArray(propCourses) && propCourses.length > 0 ? propCourses : mockCourses;
+
+    // Completed = from profile or enrolled with 100% progress
+    const completedFromEnrolled = new Set(
+        enrolledCourses
+            .filter((c: any) => (c.progress_percentage ?? c.progress ?? 0) >= 100)
+            .map((c: any) => String(c.id))
+    );
+    const completedIds = [...new Set([...(user.completedCourseIds || []), ...completedFromEnrolled])];
+    const preferredCats = user.preferredCategories || [];
+
+    // Simple recommendation logic - use published courses when provided
     const getRecommendations = () => {
-        const completedIds = user.completedCourseIds || [];
-        const preferredCats = user.preferredCategories || [];
+        const idMatch = (c: any) => !completedIds.includes(String(c.id));
+        let recommended = courseList.filter((c: any) => idMatch(c));
 
-        // Filter out completed courses
-        let recommended = courses.filter(c => !completedIds.includes(c.id));
-
-        // Prioritize preferred categories
-        recommended.sort((a, b) => {
-            const aPref = preferredCats.includes(a.category) ? 1 : 0;
-            const bPref = preferredCats.includes(b.category) ? 1 : 0;
+        recommended.sort((a: any, b: any) => {
+            const aPref = preferredCats.includes(a?.category) ? 1 : 0;
+            const bPref = preferredCats.includes(b?.category) ? 1 : 0;
             return bPref - aPref;
         });
 
@@ -48,18 +57,18 @@ export const RecommendationSection = ({ user }: RecommendationSectionProps) => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {recommendedCourses.map((course) => (
-                    <Link key={course.id} to={`/course/${course.id}`} className="group">
+                {recommendedCourses.map((course, idx) => (
+                    <Link key={course?.id ?? idx} to={`/course/${course?.id}`} className="group">
                         <div className="bg-card rounded-xl p-4 border border-border shadow-card hover:shadow-elevated transition-all duration-300 flex gap-4">
-                            <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-                                <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                            <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
+                                <img src={course?.thumbnail || "https://placehold.co/80x80?text=Course"} alt={course?.title || "Course"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                             </div>
                             <div className="min-w-0 flex flex-col justify-center">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-accent">{course.category}</span>
-                                <h3 className="font-semibold text-foreground text-sm line-clamp-1 mt-0.5">{course.title}</h3>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-accent">{course?.category || ""}</span>
+                                <h3 className="font-semibold text-foreground text-sm line-clamp-1 mt-0.5">{course?.title || "Course"}</h3>
                                 <div className="flex items-center gap-2 mt-1 text-muted-foreground">
                                     <BookOpen className="w-3 h-3" />
-                                    <span className="text-xs">{course.duration}</span>
+                                    <span className="text-xs">{course?.duration || ""}</span>
                                 </div>
                             </div>
                         </div>

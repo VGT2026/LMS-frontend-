@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { studentSubmissions, instructorCourses } from "@/data/mockData";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAssignments, Question, QuestionType } from "@/contexts/AssignmentContext";
+import { authAPI, courseAPI, assignmentAPI } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +26,7 @@ const statusIcons: Record<string, typeof Clock> = {
 
 interface Submission {
     id: string;
+    assignmentId: string;
     studentName: string;
     studentEmail: string;
     courseId: string;
@@ -34,7 +36,14 @@ interface Submission {
     status: "pending" | "graded" | "late";
     grade: number | null;
     feedback: string;
+    content: string | null;
     fileName: string;
+}
+
+interface InstructorCourse {
+    id: string;
+    title: string;
+    status?: string;
 }
 
 const questionTypeLabels: Record<QuestionType, string> = {
@@ -51,14 +60,23 @@ const questionTypeIcons: Record<QuestionType, typeof ListChecks> = {
 
 const InstructorAssignments = () => {
     const { toast } = useToast();
-    const { assignments, addAssignment } = useAssignments();
-    const [submissions, setSubmissions] = useState<Submission[]>(studentSubmissions);
+    const { assignments, addAssignment, refreshAssignments } = useAssignments();
+    const location = useLocation();
+    const navigate = useNavigate();
+    const [submissions, setSubmissions] = useState<Submission[]>([]);
+    const [instructorCourses, setInstructorCourses] = useState<InstructorCourse[]>([]);
+    const [loadingCourses, setLoadingCourses] = useState(true);
+    const [loadingSubs, setLoadingSubs] = useState(true);
     const [courseFilter, setCourseFilter] = useState("all");
     const [statusFilter, setStatusFilter] = useState("all");
     const [gradingId, setGradingId] = useState<string | null>(null);
     const [gradeInput, setGradeInput] = useState("");
     const [feedbackInput, setFeedbackInput] = useState("");
+    const [gradingAssignment, setGradingAssignment] = useState<any | null>(null);
+    const [loadingGradingAssignment, setLoadingGradingAssignment] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [publishingIds, setPublishingIds] = useState<Set<string>>(new Set());
+    const [optimisticPublishedIds, setOptimisticPublishedIds] = useState<Set<string>>(new Set());
 
     // Create assignment modal state
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -69,6 +87,67 @@ const InstructorAssignments = () => {
     const [newPoints, setNewPoints] = useState("100");
     const [questions, setQuestions] = useState<Question[]>([]);
 
+    useEffect(() => {
+        const fetchCourses = async () => {
+            try {
+                const profileRes = await authAPI.getProfile();
+                const userId = profileRes?.data?.id;
+                if (!userId || (profileRes?.data?.role !== "instructor" && profileRes?.data?.role !== "admin")) {
+                    setInstructorCourses([]);
+                    return;
+                }
+                const coursesRes = await courseAPI.getAllCourses({ instructor_id: userId, limit: 100 });
+                const list = coursesRes?.data ?? [];
+                setInstructorCourses(
+                    Array.isArray(list)
+                        ? list.map((c: any) => ({
+                            id: String(c.id),
+                            title: c.title ?? "",
+                            status: c.is_active ? "active" : "draft",
+                          }))
+                        : []
+                );
+            } catch {
+                setInstructorCourses([]);
+            } finally {
+                setLoadingCourses(false);
+            }
+        };
+        fetchCourses();
+    }, []);
+
+    useEffect(() => {
+        const fetchSubmissions = async () => {
+            try {
+                const res = await assignmentAPI.listSubmissions();
+                const list = res?.data ?? res ?? [];
+                const arr = Array.isArray(list) ? list : [];
+                setSubmissions(
+                    arr.map((s: any) => ({
+                        id: String(s.id),
+                        assignmentId: String(s.assignment_id ?? ""),
+                        studentName: s.user_name ?? `Student #${s.user_id}`,
+                        studentEmail: s.user_email ?? "",
+                        courseId: String(s.course_id ?? ""),
+                        courseTitle: s.course_title ?? "",
+                        assignmentTitle: s.assignment_title ?? "",
+                        submittedAt: s.submitted_at ?? "",
+                        status: (s.grade != null ? "graded" : "pending") as "pending" | "graded" | "late",
+                        grade: s.grade ?? null,
+                        feedback: s.feedback ?? "",
+                        content: s.content ?? null,
+                        fileName: "Answers",
+                    }))
+                );
+            } catch {
+                setSubmissions([]);
+            } finally {
+                setLoadingSubs(false);
+            }
+        };
+        fetchSubmissions();
+    }, []);
+
     const filtered = submissions.filter(s =>
         (courseFilter === "all" || s.courseId === courseFilter) &&
         (statusFilter === "all" || s.status === statusFilter)
@@ -76,28 +155,95 @@ const InstructorAssignments = () => {
 
     const gradingSub = submissions.find(s => s.id === gradingId);
 
-    const handleGrade = () => {
-        const grade = parseInt(gradeInput);
-        if (isNaN(grade) || grade < 0 || grade > 100) {
+    // If coming from Instructor Dashboard "Grade" button, auto-open modal for that submission
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const toGrade = params.get("grade");
+        if (!toGrade) return;
+        if (gradingId) return;
+        const sub = submissions.find(s => s.id === toGrade);
+        if (!sub) return;
+        setGradingId(sub.id);
+        setGradeInput(sub.grade?.toString() || "");
+        setFeedbackInput(sub.feedback || "");
+        navigate(location.pathname, { replace: true });
+    }, [gradingId, location.pathname, location.search, navigate, submissions]);
+
+    const parsedAnswers = useMemo(() => {
+        const raw = gradingSub?.content;
+        if (!raw || typeof raw !== "string") return {};
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === "object" ? parsed : {};
+        } catch {
+            return {};
+        }
+    }, [gradingSub?.content]);
+
+    useEffect(() => {
+        const loadAssignmentForGrading = async () => {
+            if (!gradingId) {
+                setGradingAssignment(null);
+                return;
+            }
+            const sub = submissions.find(s => s.id === gradingId);
+            if (!sub?.assignmentId) {
+                setGradingAssignment(null);
+                return;
+            }
+            setLoadingGradingAssignment(true);
+            try {
+                const res = await assignmentAPI.getById(sub.assignmentId);
+                const data = res?.data ?? res;
+                setGradingAssignment(data ?? null);
+            } catch {
+                setGradingAssignment(null);
+            } finally {
+                setLoadingGradingAssignment(false);
+            }
+        };
+        loadAssignmentForGrading();
+    }, [gradingId, submissions]);
+
+    const handleGrade = async () => {
+        const gradeVal = parseFloat(gradeInput);
+        if (isNaN(gradeVal) || gradeVal < 0 || gradeVal > 100) {
             toast({ title: "Invalid grade", description: "Please enter a grade between 0 and 100.", variant: "destructive" });
             return;
         }
-        setSubmissions(submissions.map(s =>
-            s.id === gradingId ? { ...s, grade, feedback: feedbackInput, status: "graded" as const } : s
-        ));
-        setGradingId(null);
-        setGradeInput("");
-        setFeedbackInput("");
-        toast({ title: "Grade submitted", description: `${gradingSub?.studentName}'s submission has been graded.` });
+        try {
+            await assignmentAPI.gradeSubmission(Number(gradingId), gradeVal, feedbackInput);
+            setSubmissions(submissions.map(s =>
+                s.id === gradingId ? { ...s, grade: gradeVal, feedback: feedbackInput, status: "graded" as const } : s
+            ));
+            setGradingId(null);
+            setGradeInput("");
+            setFeedbackInput("");
+            toast({ title: "Grade submitted", description: `${gradingSub?.studentName}'s submission has been graded.` });
+        } catch (err) {
+            toast({ title: "Failed to grade", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
+        }
     };
 
-    const handleBulkGrade = () => {
+    const handleBulkGrade = async () => {
         if (selectedIds.size === 0) return;
-        setSubmissions(submissions.map(s =>
-            selectedIds.has(s.id) && s.status !== "graded" ? { ...s, status: "graded" as const, grade: s.grade ?? 80, feedback: s.feedback || "Good work." } : s
-        ));
+        let done = 0;
+        for (const subId of selectedIds) {
+            const sub = submissions.find(s => s.id === subId && s.status !== "graded");
+            if (sub) {
+                try {
+                    await assignmentAPI.gradeSubmission(Number(subId), sub.grade ?? 80, sub.feedback || "Good work.");
+                    done++;
+                } catch (_) {}
+            }
+        }
+        if (done > 0) {
+            setSubmissions(submissions.map(s =>
+                selectedIds.has(s.id) && s.status !== "graded" ? { ...s, status: "graded" as const, grade: s.grade ?? 80, feedback: s.feedback || "Good work." } : s
+            ));
+            toast({ title: "Bulk grading complete", description: `${done} submission(s) marked as graded.` });
+        }
         setSelectedIds(new Set());
-        toast({ title: "Bulk grading complete", description: `${selectedIds.size} submissions marked as graded.` });
     };
 
     const toggleSelect = (id: string) => {
@@ -165,7 +311,7 @@ const InstructorAssignments = () => {
         }));
     };
 
-    const handleCreateAssignment = () => {
+    const handleCreateAssignment = async () => {
         if (!newTitle || !newCourseId || !newDueDate) {
             toast({ title: "Missing fields", description: "Please fill in title, course, and due date.", variant: "destructive" });
             return;
@@ -181,17 +327,21 @@ const InstructorAssignments = () => {
         }
         const course = instructorCourses.find(c => c.id === newCourseId);
         const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
-        addAssignment({
-            title: newTitle,
-            description: newDescription,
-            courseId: newCourseId,
-            courseTitle: course?.title || "",
-            dueDate: newDueDate,
-            points: totalPoints,
-            questions,
-        });
-        resetCreateForm();
-        toast({ title: "Assignment created", description: `"${newTitle}" with ${questions.length} question(s) is now visible to students.` });
+        try {
+            await addAssignment({
+                title: newTitle,
+                description: newDescription,
+                courseId: newCourseId,
+                courseTitle: course?.title || "",
+                dueDate: newDueDate,
+                points: totalPoints,
+                questions,
+            });
+            resetCreateForm();
+            toast({ title: "Draft created", description: `"${newTitle}" saved as draft. Publish it when ready for students.` });
+        } catch (err) {
+            toast({ title: "Failed to create", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
+        }
     };
 
     const resetCreateForm = () => {
@@ -212,13 +362,13 @@ const InstructorAssignments = () => {
                     <p className="text-muted-foreground mt-1">Create assignments and grade student submissions</p>
                 </div>
                 <Button onClick={() => setShowCreateModal(true)} className="gap-2">
-                    <Plus className="w-4 h-4" /> Create Assignment
+                    <Plus className="w-4 h-4" /> Create Draft
                 </Button>
             </div>
 
             {/* Created Assignments List */}
             <div>
-                <h2 className="text-lg font-semibold text-foreground mb-3">Published Assignments</h2>
+                <h2 className="text-lg font-semibold text-foreground mb-3">Assignments</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {assignments.map((a) => (
                         <motion.div
@@ -227,11 +377,23 @@ const InstructorAssignments = () => {
                             animate={{ opacity: 1, y: 0 }}
                             className="bg-card rounded-xl border border-border shadow-card p-5 hover:shadow-elevated transition-shadow"
                         >
+                            {(() => {
+                                const aid = String(a.id);
+                                const isOptimistic = optimisticPublishedIds.has(aid);
+                                const isPublished = Boolean(a.isPublished) || isOptimistic;
+                                const isPublishing = publishingIds.has(aid);
+                                return (
+                            <>
                             <div className="flex items-start justify-between mb-3">
                                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                                     <FileText className="w-5 h-5 text-primary" />
                                 </div>
-                                <span className="text-xs font-medium text-accent bg-accent/10 px-2 py-1 rounded-md">{a.courseTitle}</span>
+                                <div className="flex items-center gap-2 flex-wrap justify-end">
+                                    <span className="text-xs font-medium text-accent bg-accent/10 px-2 py-1 rounded-md">{a.courseTitle}</span>
+                                    <span className={`text-xs font-medium px-2 py-1 rounded-md ${isPublished ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>
+                                        {isPublished ? "Published" : "Draft"}
+                                    </span>
+                                </div>
                             </div>
                             <h3 className="font-semibold text-foreground text-sm mb-1">{a.title}</h3>
                             <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{a.description}</p>
@@ -257,16 +419,52 @@ const InstructorAssignments = () => {
                                     </span>
                                 )}
                             </div>
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                <span className="flex items-center gap-1">
-                                    <Calendar className="w-3 h-3" />
-                                    {new Date(a.dueDate).toLocaleDateString()}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                    <Trophy className="w-3 h-3" />
-                                    {a.points} pts
-                                </span>
+                            <div className="flex items-center justify-between mt-3">
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <span className="flex items-center gap-1">
+                                        <Calendar className="w-3 h-3" />
+                                        {new Date(a.dueDate).toLocaleDateString()}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <Trophy className="w-3 h-3" />
+                                        {a.points} pts
+                                    </span>
+                                </div>
+                                {!isPublished && (
+                                    <Button
+                                        size="sm"
+                                        className="text-xs gap-1"
+                                        disabled={isPublishing}
+                                        onClick={async () => {
+                                            setPublishingIds((prev) => new Set(prev).add(aid));
+                                            setOptimisticPublishedIds((prev) => new Set(prev).add(aid));
+                                            try {
+                                                await assignmentAPI.publish(aid);
+                                                toast({ title: "Published", description: `"${a.title}" is now visible to students.` });
+                                                await refreshAssignments();
+                                            } catch (err) {
+                                                setOptimisticPublishedIds((prev) => {
+                                                    const next = new Set(prev);
+                                                    next.delete(aid);
+                                                    return next;
+                                                });
+                                                toast({ title: "Failed to publish", variant: "destructive" });
+                                            } finally {
+                                                setPublishingIds((prev) => {
+                                                    const next = new Set(prev);
+                                                    next.delete(aid);
+                                                    return next;
+                                                });
+                                            }
+                                        }}
+                                    >
+                                        <CheckCircle className="w-3.5 h-3.5" /> Publish
+                                    </Button>
+                                )}
                             </div>
+                            </>
+                                );
+                            })()}
                         </motion.div>
                     ))}
                 </div>
@@ -282,7 +480,7 @@ const InstructorAssignments = () => {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Courses</SelectItem>
-                            {instructorCourses.filter(c => c.status === "active").map(c => (
+                            {instructorCourses.filter(c => c.status === "active" || !c.status).map(c => (
                                 <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
                             ))}
                         </SelectContent>
@@ -309,7 +507,11 @@ const InstructorAssignments = () => {
 
             {/* Submissions Table */}
             <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
-                {filtered.length === 0 ? (
+                {loadingSubs ? (
+                    <div className="p-12 text-center">
+                        <p className="text-muted-foreground">Loading submissions...</p>
+                    </div>
+                ) : filtered.length === 0 ? (
                     <div className="p-12 text-center">
                         <ClipboardCheck className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                         <p className="text-muted-foreground">No submissions match your filters.</p>
@@ -400,7 +602,7 @@ const InstructorAssignments = () => {
             {/* Grading Modal */}
             {gradingId && gradingSub && (
                 <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-card rounded-xl border border-border shadow-elevated max-w-lg w-full overflow-hidden">
+                    <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-card rounded-xl border border-border shadow-elevated max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                         <div className="flex items-center justify-between p-5 border-b border-border">
                             <div>
                                 <h3 className="font-semibold text-foreground">Grade Submission</h3>
@@ -410,12 +612,77 @@ const InstructorAssignments = () => {
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
-                        <div className="p-5 space-y-4">
+                        <div className="p-5 space-y-4 overflow-y-auto">
                             <div className="bg-muted/50 rounded-lg p-3 flex items-center gap-2">
                                 <FileText className="w-4 h-4 text-muted-foreground" />
                                 <span className="text-sm text-foreground">{gradingSub.fileName}</span>
                                 <span className="text-xs text-muted-foreground ml-auto">Submitted {new Date(gradingSub.submittedAt).toLocaleString()}</span>
                             </div>
+
+                            <div className="space-y-2">
+                                <Label>Student Answers</Label>
+                                <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
+                                    {loadingGradingAssignment ? (
+                                        <p className="text-sm text-muted-foreground">Loading answers…</p>
+                                    ) : Array.isArray(gradingAssignment?.questions) && gradingAssignment.questions.length > 0 ? (
+                                        <div className="space-y-3">
+                                            {gradingAssignment.questions.map((q: any, idx: number) => {
+                                                const qid = String(q.id ?? "");
+                                                const qType = q.type as QuestionType;
+                                                const rawAnswer = (parsedAnswers as any)?.[qid];
+                                                const answered =
+                                                    qType === "mcq"
+                                                        ? rawAnswer != null && String(rawAnswer).length > 0
+                                                        : typeof rawAnswer === "string" && rawAnswer.trim().length > 0;
+                                                const answerText =
+                                                    qType === "mcq"
+                                                        ? (() => {
+                                                              const sel = Number(rawAnswer);
+                                                              if (!Number.isFinite(sel)) return String(rawAnswer ?? "");
+                                                              const opt = Array.isArray(q.options) ? q.options[sel] : "";
+                                                              return opt ?? "";
+                                                          })()
+                                                        : String(rawAnswer ?? "");
+
+                                                return (
+                                                    <div key={qid || idx} className="rounded-lg border border-border bg-background p-3">
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-semibold text-foreground">
+                                                                    Q{idx + 1}. {q.text}
+                                                                </p>
+                                                                <p className="text-xs text-muted-foreground mt-0.5 capitalize">
+                                                                    {questionTypeLabels[qType]} · {q.points ?? 0} pts
+                                                                </p>
+                                                            </div>
+                                                            <span className={`text-xs font-medium px-2 py-1 rounded-md ${answered ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                                                                {answered ? "Answered" : "No answer"}
+                                                            </span>
+                                                        </div>
+                                                        <div className="mt-3 rounded-md border border-border bg-muted/30 p-3">
+                                                            <pre className="whitespace-pre-wrap text-sm text-foreground">{answerText || "—"}</pre>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : Object.keys(parsedAnswers).length > 0 ? (
+                                        <div className="space-y-2">
+                                            {Object.entries(parsedAnswers).map(([qid, ans]) => (
+                                                <div key={qid} className="rounded-lg border border-border bg-background p-3">
+                                                    <p className="text-sm font-semibold text-foreground">Question {qid}</p>
+                                                    <div className="mt-2 rounded-md border border-border bg-muted/30 p-3">
+                                                        <pre className="whitespace-pre-wrap text-sm text-foreground">{String(ans ?? "") || "—"}</pre>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">No answer content found for this submission.</p>
+                                    )}
+                                </div>
+                            </div>
+
                             <div className="space-y-2">
                                 <Label>Grade (0-100)</Label>
                                 <Input type="number" min="0" max="100" placeholder="Enter grade..." value={gradeInput} onChange={(e) => setGradeInput(e.target.value)} />
@@ -425,7 +692,7 @@ const InstructorAssignments = () => {
                                 <Textarea placeholder="Write feedback for the student..." value={feedbackInput} onChange={(e) => setFeedbackInput(e.target.value)} rows={4} className="bg-muted/50" />
                             </div>
                         </div>
-                        <div className="p-5 border-t border-border flex gap-3 justify-end">
+                        <div className="p-5 border-t border-border flex gap-3 justify-end flex-shrink-0">
                             <Button variant="outline" onClick={() => setGradingId(null)}>Cancel</Button>
                             <Button onClick={handleGrade} className="gap-1.5"><CheckCircle className="w-4 h-4" /> Submit Grade</Button>
                         </div>
@@ -464,7 +731,7 @@ const InstructorAssignments = () => {
                                         <Select value={newCourseId} onValueChange={setNewCourseId}>
                                             <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                             <SelectContent>
-                                                {instructorCourses.filter(c => c.status === "active").map(c => (
+                                                {instructorCourses.filter(c => c.status === "active" || !c.status).map(c => (
                                                     <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -618,7 +885,7 @@ const InstructorAssignments = () => {
                             <div className="flex gap-3">
                                 <Button variant="outline" onClick={resetCreateForm}>Cancel</Button>
                                 <Button onClick={handleCreateAssignment} className="gap-1.5">
-                                    <Plus className="w-4 h-4" /> Publish Assignment
+                                    <Plus className="w-4 h-4" /> Create Draft
                                 </Button>
                             </div>
                         </div>

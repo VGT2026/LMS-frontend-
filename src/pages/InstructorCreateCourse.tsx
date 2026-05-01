@@ -1,57 +1,43 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, CheckCircle } from "lucide-react";
+import { PlusCircle, CheckCircle, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { authAPI, courseAPI } from "@/services/api";
-
-interface Instructor {
-    id: number;
-    name: string;
-    email: string;
-    is_active?: boolean;
-}
+import { courseAPI, authAPI } from "@/services/api";
 
 const PREDEFINED_CATEGORIES = ["Development", "Data Science", "Design", "Business", "Security", "Cloud & DevOps"];
 
-const AdminCreateCoursePage = () => {
+const InstructorCreateCoursePage = () => {
     const { toast } = useToast();
+    const navigate = useNavigate();
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [category, setCategory] = useState("");
-    const [instructorId, setInstructorId] = useState<string>("");
     const [thumbnail, setThumbnail] = useState("");
     const [submitted, setSubmitted] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [instructors, setInstructors] = useState<Instructor[]>([]);
-    const [loadingInstructors, setLoadingInstructors] = useState(true);
+    const [userId, setUserId] = useState<number | null>(null);
     const [showCustomCategory, setShowCustomCategory] = useState(false);
     const [customCategory, setCustomCategory] = useState("");
     const [categories, setCategories] = useState<string[]>(PREDEFINED_CATEGORIES);
 
     useEffect(() => {
-        const fetchInstructors = async () => {
+        const fetchProfile = async () => {
             try {
-                setLoadingInstructors(true);
-                // Use getAllUsers with role filter - same API that loads Admin Users list
-                const response = await authAPI.getAllUsers({ role: "instructor", limit: 100 });
-                const list = response?.data ?? [];
-                const active = Array.isArray(list) ? list.filter((i: Instructor) => i.is_active !== false) : [];
-                setInstructors(active);
-            } catch (error) {
-                console.error('Failed to fetch instructors:', error);
-                setInstructors([]);
-                toast({ title: "Error", description: "Failed to load instructors. Ensure you're logged in as admin.", variant: "destructive" });
-            } finally {
-                setLoadingInstructors(false);
+                const res = await authAPI.getProfile();
+                const id = res?.data?.id ?? res?.id;
+                if (id != null) setUserId(Number(id));
+            } catch {
+                setUserId(null);
             }
         };
-        fetchInstructors();
-    }, [toast]);
+        fetchProfile();
+    }, []);
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -72,20 +58,19 @@ const AdminCreateCoursePage = () => {
     }, []);
 
     const handleSubmit = async () => {
-        if (!title || !category || !instructorId) {
+        if (!title || !category) {
             toast({
                 title: "Missing fields",
-                description: "Please fill in title, category, and select an instructor.",
+                description: "Please fill in title and category.",
                 variant: "destructive"
             });
             return;
         }
 
-        const selectedInstructor = instructors.find(inst => inst.id.toString() === instructorId);
-        if (!selectedInstructor) {
+        if (!userId) {
             toast({
-                title: "Invalid instructor",
-                description: "The selected instructor is no longer available. Please choose another instructor.",
+                title: "Error",
+                description: "Could not identify your account. Please try again.",
                 variant: "destructive"
             });
             return;
@@ -96,23 +81,29 @@ const AdminCreateCoursePage = () => {
             const response = await courseAPI.createCourse({
                 title: title.trim(),
                 description: description.trim() || undefined,
-                instructor_id: parseInt(instructorId),
+                instructor_id: userId,
                 category,
                 thumbnail: thumbnail.trim() || undefined,
             });
 
-            if (response.success) {
+            const newCourse = response?.data ?? response?.course ?? response;
+            const courseId = newCourse?.id;
+
+            if (response?.success || newCourse) {
                 setSubmitted(true);
                 toast({
                     title: "Course created!",
-                    description: `"${title}" has been assigned to ${selectedInstructor.name} and published.`
+                    description: `"${title}" has been created as a draft. Add modules and publish when ready.`
                 });
                 setTimeout(() => {
-                    setSubmitted(false);
-                    setTitle(""); setDescription(""); setCategory(""); setInstructorId(""); setThumbnail("");
-                }, 3000);
+                    if (courseId) {
+                        navigate(`/instructor/course/${courseId}`);
+                    } else {
+                        navigate("/instructor/courses");
+                    }
+                }, 1500);
             } else {
-                throw new Error(response.message || "Failed to create course");
+                throw new Error(response?.message || "Failed to create course");
             }
         } catch (error) {
             console.error('Create course error:', error);
@@ -133,16 +124,21 @@ const AdminCreateCoursePage = () => {
                     <CheckCircle className="w-10 h-10 text-success" />
                 </div>
                 <h2 className="text-2xl font-bold text-foreground">Course Created!</h2>
-                <p className="text-muted-foreground mt-2">"{title}" has been published and is now available for enrollment.</p>
+                <p className="text-muted-foreground mt-2">"{title}" has been created as a draft. Redirecting to add modules...</p>
             </motion.div>
         );
     }
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-3xl mx-auto space-y-6">
+            <div className="flex items-center gap-3">
+                <Button variant="ghost" size="sm" onClick={() => navigate("/instructor/courses")} className="gap-1.5">
+                    <ArrowLeft className="w-4 h-4" /> Back
+                </Button>
+            </div>
             <div>
                 <h1 className="text-2xl font-bold text-foreground">Create New Course</h1>
-                <p className="text-muted-foreground mt-1">Set up a new course for students</p>
+                <p className="text-muted-foreground mt-1">Create a new course and add modules. You'll be the instructor.</p>
             </div>
 
             <div className="bg-card rounded-xl border border-border shadow-card p-6 space-y-5">
@@ -231,42 +227,14 @@ const AdminCreateCoursePage = () => {
                     <Textarea placeholder="Course description..." value={description} onChange={e => setDescription(e.target.value)} rows={3} className="bg-muted/50" />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <Label>Instructor *</Label>
-                        <Select
-                            value={loadingInstructors ? "__loading__" : (instructorId || (instructors.length > 0 ? "__select__" : "__none__"))}
-                            onValueChange={(v) => !["__select__", "__none__", "__loading__"].includes(v) && setInstructorId(v)}
-                            disabled={loadingInstructors}
-                        >
-                            <SelectTrigger><SelectValue placeholder={loadingInstructors ? "Loading..." : "Select instructor"} /></SelectTrigger>
-                            <SelectContent>
-                                {loadingInstructors ? (
-                                    <SelectItem value="__loading__" disabled>Loading...</SelectItem>
-                                ) : instructors.length > 0 ? (
-                                    <>
-                                        <SelectItem value="__select__" disabled>Select instructor</SelectItem>
-                                        {instructors.map((inst) => (
-                                            <SelectItem key={inst.id} value={inst.id.toString()}>
-                                                {inst.name}
-                                            </SelectItem>
-                                        ))}
-                                    </>
-                                ) : (
-                                    <SelectItem value="__none__" disabled>No instructors available. Create instructors first.</SelectItem>
-                                )}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Thumbnail URL (optional)</Label>
-                        <Input placeholder="https://..." value={thumbnail} onChange={e => setThumbnail(e.target.value)} />
-                    </div>
+                <div className="space-y-2">
+                    <Label>Thumbnail URL (optional)</Label>
+                    <Input placeholder="https://..." value={thumbnail} onChange={e => setThumbnail(e.target.value)} />
                 </div>
             </div>
 
             <div className="flex justify-end">
-                <Button onClick={handleSubmit} className="gap-1.5 px-8" disabled={loading}>
+                <Button onClick={handleSubmit} className="gap-1.5 px-8" disabled={loading || !userId}>
                     {loading ? (
                         <><span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> Creating...</>
                     ) : (
@@ -278,4 +246,4 @@ const AdminCreateCoursePage = () => {
     );
 };
 
-export default AdminCreateCoursePage;
+export default InstructorCreateCoursePage;

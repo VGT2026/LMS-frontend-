@@ -379,11 +379,11 @@ export const studentSubmissions = [
 ];
 
 export const instructorSchedule = [
-  { id: "ev1", title: "Advanced React — Lecture 10", type: "lecture" as const, date: "2026-02-24", time: "10:00 AM", course: "Advanced React Patterns" },
-  { id: "ev2", title: "Office Hours", type: "office-hours" as const, date: "2026-02-24", time: "2:00 PM", course: "All Courses" },
-  { id: "ev3", title: "TypeScript — Lecture 8", type: "lecture" as const, date: "2026-02-25", time: "11:00 AM", course: "Full-Stack TypeScript" },
-  { id: "ev4", title: "Assignment Review Session", type: "review" as const, date: "2026-02-26", time: "3:00 PM", course: "Advanced React Patterns" },
-  { id: "ev5", title: "System Design — Lecture 6", type: "lecture" as const, date: "2026-02-27", time: "10:00 AM", course: "System Design Fundamentals" },
+  { id: "ev1", title: "Advanced React — Lecture 10", type: "lecture" as const, date: "2026-04-22", time: "10:00 AM", course: "Advanced React Patterns" },
+  { id: "ev2", title: "Office Hours", type: "office-hours" as const, date: "2026-04-22", time: "2:00 PM", course: "All Courses" },
+  { id: "ev3", title: "TypeScript — Lecture 8", type: "lecture" as const, date: "2026-04-23", time: "11:00 AM", course: "Full-Stack TypeScript" },
+  { id: "ev4", title: "Assignment Review Session", type: "review" as const, date: "2026-04-24", time: "3:00 PM", course: "Advanced React Patterns" },
+  { id: "ev5", title: "System Design — Lecture 6", type: "lecture" as const, date: "2026-04-25", time: "10:00 AM", course: "System Design Fundamentals" },
 ];
 
 export const instructorStats = {
