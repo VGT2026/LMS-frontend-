@@ -185,7 +185,13 @@ const MessagesPage = () => {
             }
             const sentMsg = await messageAPI.sendMessage({ recipientId, content: "Hi!" });
             await fetchConversations();
-            setActiveId(sentMsg.conversation_id);
+            const nextConversationId = Number(
+                (sentMsg as { conversation_id?: number; conversationId?: number })?.conversation_id ??
+                (sentMsg as { conversation_id?: number; conversationId?: number })?.conversationId
+            );
+            if (Number.isFinite(nextConversationId) && nextConversationId > 0) {
+                setActiveId(nextConversationId);
+            }
             setIsNewChatOpen(false);
         } catch (error) {
             console.error("Failed to start chat", error);

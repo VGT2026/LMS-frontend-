@@ -89,6 +89,45 @@ export function normalizeUsersList(response: unknown): unknown[] {
   return [];
 }
 
+function normalizeConversationsList(response: unknown): unknown[] {
+  if (response == null) return [];
+  if (Array.isArray(response)) return response;
+  if (typeof response !== "object") return [];
+  const r = response as Record<string, unknown>;
+  if (Array.isArray(r.data)) return r.data;
+  if (Array.isArray(r.conversations)) return r.conversations;
+  if (r.data && typeof r.data === "object") {
+    const inner = r.data as Record<string, unknown>;
+    if (Array.isArray(inner.conversations)) return inner.conversations;
+    if (Array.isArray(inner.items)) return inner.items;
+  }
+  return [];
+}
+
+function normalizeMessagesList(response: unknown): unknown[] {
+  if (response == null) return [];
+  if (Array.isArray(response)) return response;
+  if (typeof response !== "object") return [];
+  const r = response as Record<string, unknown>;
+  if (Array.isArray(r.data)) return r.data;
+  if (Array.isArray(r.messages)) return r.messages;
+  if (r.data && typeof r.data === "object") {
+    const inner = r.data as Record<string, unknown>;
+    if (Array.isArray(inner.messages)) return inner.messages;
+    if (Array.isArray(inner.items)) return inner.items;
+  }
+  return [];
+}
+
+function normalizeMessageItem(response: unknown): any {
+  if (response == null) return response;
+  if (typeof response !== "object") return response;
+  const r = response as Record<string, any>;
+  if (r.data && typeof r.data === "object" && !Array.isArray(r.data)) return r.data;
+  if (r.message && typeof r.message === "object" && !Array.isArray(r.message)) return r.message;
+  return response;
+}
+
 // Generic API request function
 const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<any> => {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -486,16 +525,42 @@ export const discussionAPI = {
 
 // Message API functions
 export const messageAPI = {
-  getConversations: () => apiRequest('/messages/conversations'),
+  getConversations: () =>
+    apiRequest('/messages/conversations').then((res) => normalizeConversationsList(res)),
 
   getMessages: (conversationId: number) =>
-    apiRequest(`/messages/conversations/${conversationId}/messages`),
+    apiRequest(`/messages/conversations/${conversationId}/messages`).then((res) => normalizeMessagesList(res)),
 
-  sendMessage: (data: { conversationId?: number; recipientId?: number; content: string }) =>
-    apiRequest('/messages/messages', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  sendMessage: async (data: { conversationId?: number; recipientId?: number; content: string }) => {
+    const payload: Record<string, unknown> = { content: data.content };
+    if (data.conversationId != null) {
+      payload.conversationId = data.conversationId;
+      payload.conversation_id = data.conversationId;
+    }
+    if (data.recipientId != null) {
+      payload.recipientId = data.recipientId;
+      payload.recipient_id = data.recipientId;
+    }
+
+    const attempts: string[] = ['/messages/messages', '/messages'];
+    if (data.conversationId != null) {
+      attempts.push(`/messages/conversations/${data.conversationId}/messages`);
+    }
+
+    let firstError: unknown = null;
+    for (const endpoint of attempts) {
+      try {
+        const res = await apiRequest(endpoint, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        return normalizeMessageItem(res);
+      } catch (e) {
+        if (!firstError) firstError = e;
+      }
+    }
+    throw (firstError instanceof Error ? firstError : new Error('Failed to send message'));
+  },
 
   markAsRead: (conversationId: number) =>
     apiRequest(`/messages/conversations/${conversationId}/read`, {
