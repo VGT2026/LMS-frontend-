@@ -1,339 +1,217 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GraduationCap, Eye, EyeOff, ArrowLeft, CheckCircle, Mail, User, Lock } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { GraduationCap, Eye, EyeOff, ArrowLeft, CheckCircle, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
-import { useAuth } from "@/contexts/AuthContext";
-import { courseAPI } from "@/services/api";
-
-const DEFAULT_CATEGORIES = [
-  "Development", "Data Science", "Design", "Cloud",
-  "AI/ML", "DevOps", "Security", "Business"
-];
 
 const Register = () => {
-  const { register } = useAuth();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
-    confirmPassword: "",
-    preferredCategories: [] as string[]
+    confirmPassword: ""
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [acceptTerms, setAcceptTerms] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
+  const { register, loading, error } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await courseAPI.getCategories?.();
-        const fetchedCategories = Array.isArray(response?.data) ? response.data : [];
-        if (fetchedCategories.length > 0) {
-          setCategories(fetchedCategories);
-        } else {
-          setCategories(DEFAULT_CATEGORIES);
-        }
-      } catch (error) {
-        console.error('Failed to fetch categories:', error);
-        setCategories(DEFAULT_CATEGORIES);
-      }
-    };
-    fetchCategories();
-  }, []);
-
-  const handleCategoryToggle = (category: string) => {
-    setFormData(prev => ({
-      ...prev,
-      preferredCategories: prev.preferredCategories.includes(category)
-        ? prev.preferredCategories.filter(c => c !== category)
-        : [...prev.preferredCategories, category]
-    }));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
 
-    // Validation
-    if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
-      setError("Please fill in all required fields");
+    // #region agent log
+    fetch('http://127.0.0.1:7785/ingest/f335539f-59e7-4a6f-af42-aef3f033942a', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '288e55' },
+      body: JSON.stringify({
+        sessionId: '288e55',
+        location: 'Register.tsx:handleSubmit',
+        message: 'Registration form submitted',
+        data: {
+          hasName: !!formData.name,
+          hasEmail: !!formData.email,
+          hasPassword: !!formData.password,
+          passwordLength: formData.password?.length,
+          passwordsMatch: formData.password === formData.confirmPassword
+        },
+        runId: 'debug-registration',
+        hypothesisId: 'form-validation',
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+
+    if (!formData.name || !formData.email || !formData.password) {
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match");
       return;
     }
 
     if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters long");
       return;
     }
-
-    if (!acceptTerms) {
-      setError("Please accept the terms and conditions");
-      return;
-    }
-
-    setLoading(true);
 
     try {
-      const result = await register(
-        formData.name,
-        formData.email,
-        formData.password,
-        formData.confirmPassword
-      );
+      await register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password
+      });
 
-      if (result.success) {
-        setSuccess(true);
-        setTimeout(() => {
-          navigate(result.user?.role === "admin" ? "/admin" :
-                  result.user?.role === "instructor" ? "/instructor" : "/dashboard", { replace: true });
-        }, 1500);
-      } else {
-        setError(result.message || "Registration failed");
-      }
+      // #region agent log
+      fetch('http://127.0.0.1:7785/ingest/f335539f-59e7-4a6f-af42-aef3f033942a', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '288e55' },
+        body: JSON.stringify({
+          sessionId: '288e55',
+          location: 'Register.tsx:handleSubmit',
+          message: 'Registration completed successfully',
+          data: { redirecting: true },
+          runId: 'debug-registration',
+          hypothesisId: 'form-validation',
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+
+      navigate("/");
     } catch (error) {
-      console.error('Registration error:', error);
-      setError("Registration failed. Please try again.");
-    } finally {
-      setLoading(false);
+      // Error is handled by AuthContext
     }
   };
 
-  if (success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-8 bg-gradient-to-br from-primary/5 via-background to-accent/5">
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="bg-card rounded-xl border border-border shadow-elevated max-w-md w-full p-8 text-center"
-        >
-          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-success/10 flex items-center justify-center">
-            <CheckCircle className="w-8 h-8 text-success" />
-          </div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Registration Successful!</h2>
-          <p className="text-muted-foreground mb-6">
-            Your account has been created successfully. You can now log in with your credentials.
-          </p>
-          <Button onClick={() => navigate("/login")} className="w-full">
-            Continue to Login
-          </Button>
-        </motion.div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex">
-      {/* Left - Form */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-md"
-        >
-          <Link to="/login" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Login
-          </Link>
-
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-lg bg-gradient-primary flex items-center justify-center">
-              <GraduationCap className="w-6 h-6 text-primary-foreground" />
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-md"
+      >
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          <div className="px-8 pt-8 pb-6">
+            <div className="flex items-center justify-center mb-6">
+              <div className="bg-blue-100 p-3 rounded-full">
+                <GraduationCap className="h-8 w-8 text-blue-600" />
+              </div>
             </div>
-            <span className="text-2xl font-bold text-foreground">LMS Pro</span>
-          </div>
 
-          <h1 className="text-3xl font-bold text-foreground mb-2">Create Account</h1>
-          <p className="text-muted-foreground mb-8">Join our learning platform and start your journey</p>
+            <div className="text-center mb-6">
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Join TeachSmart</h1>
+              <p className="text-gray-600">Create your account to start learning</p>
+            </div>
 
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              className="mb-6 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm"
-            >
-              {error}
-            </motion.div>
-          )}
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-foreground font-medium">Full Name</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name" className="text-gray-700 font-medium">Full Name</Label>
                 <Input
                   id="name"
+                  name="name"
                   type="text"
-                  placeholder="John Doe"
+                  placeholder="Enter your full name"
                   value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="pl-9 h-11 bg-card"
+                  onChange={handleChange}
+                  className="h-11"
+                  required
                 />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-foreground font-medium">Email Address</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-gray-700 font-medium">Email</Label>
                 <Input
                   id="email"
+                  name="email"
                   type="email"
-                  placeholder="john@example.com"
+                  placeholder="you@example.com"
                   value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  className="pl-9 h-11 bg-card"
+                  onChange={handleChange}
+                  className="h-11"
+                  required
                 />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-foreground font-medium">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                  className="pl-9 pr-10 h-11 bg-card"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-gray-700 font-medium">Password</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="h-11 pr-10"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {formData.password && formData.password.length < 6 && (
+                  <p className="text-sm text-red-500">Password must be at least 6 characters</p>
+                )}
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-foreground font-medium">Confirm Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-gray-700 font-medium">Confirm Password</Label>
                 <Input
                   id="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
+                  name="confirmPassword"
+                  type="password"
                   placeholder="••••••••"
                   value={formData.confirmPassword}
-                  onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                  className="pl-9 pr-10 h-11 bg-card"
+                  onChange={handleChange}
+                  className="h-11"
+                  required
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+                  <p className="text-sm text-red-500">Passwords do not match</p>
+                )}
               </div>
+
+              <Button
+                type="submit"
+                className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                disabled={loading || !formData.name || !formData.email || !formData.password || !formData.confirmPassword || formData.password !== formData.confirmPassword || formData.password.length < 6}
+              >
+                {loading ? "Creating Account..." : "Create Account"}
+              </Button>
+            </form>
+
+            <div className="mt-6 text-center">
+              <p className="text-gray-600">
+                Already have an account?{" "}
+                <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium">
+                  Sign in
+                </Link>
+              </p>
             </div>
-
-            <div className="space-y-2">
-              <Label className="text-foreground font-medium">Preferred Categories (Optional)</Label>
-              <div className="flex flex-wrap gap-2">
-                {categories.map(category => (
-                  <button
-                    key={category}
-                    type="button"
-                    onClick={() => handleCategoryToggle(category)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      formData.preferredCategories.includes(category)
-                        ? "bg-accent text-accent-foreground"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    }`}
-                  >
-                    {category}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <Checkbox
-                id="terms"
-                checked={acceptTerms}
-                onCheckedChange={(checked) => setAcceptTerms(checked as boolean)}
-                className="mt-0.5"
-              />
-              <Label htmlFor="terms" className="text-sm text-muted-foreground leading-relaxed cursor-pointer">
-                I agree to the <Link to="#" className="text-accent hover:underline">Terms of Service</Link> and{" "}
-                <Link to="#" className="text-accent hover:underline">Privacy Policy</Link>
-              </Label>
-            </div>
-
-            <Button type="submit" className="w-full h-11 text-base font-semibold" disabled={loading}>
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                  Creating Account...
-                </span>
-              ) : (
-                "Create Account"
-              )}
-            </Button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <Link to="/login" className="text-accent hover:underline font-medium">
-              Sign in here
-            </Link>
-          </p>
-        </motion.div>
-      </div>
-
-      {/* Right - Illustration */}
-      <div className="hidden lg:flex flex-1 bg-gradient-hero items-center justify-center p-12 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-20 left-20 w-72 h-72 rounded-full bg-accent blur-3xl" />
-          <div className="absolute bottom-20 right-20 w-96 h-96 rounded-full bg-primary-foreground blur-3xl" />
+          </div>
         </div>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.7, delay: 0.2 }}
-          className="relative z-10 text-center max-w-lg"
-        >
-          <div className="w-24 h-24 mx-auto mb-8 rounded-2xl bg-primary-foreground/10 backdrop-blur flex items-center justify-center">
-            <GraduationCap className="w-14 h-14 text-primary-foreground" />
-          </div>
-          <h2 className="text-4xl font-bold text-primary-foreground mb-4">Join Our Community</h2>
-          <p className="text-lg text-primary-foreground/80 mb-8">
-            Start your learning journey today. Access thousands of courses, earn certificates, and advance your career.
-          </p>
-          <div className="flex justify-center gap-8 text-primary-foreground/70">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-primary-foreground">FREE</div>
-              <div className="text-sm">Registration</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-primary-foreground">150+</div>
-              <div className="text-sm">Courses</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-primary-foreground">24/7</div>
-              <div className="text-sm">Support</div>
-            </div>
-          </div>
-        </motion.div>
-      </div>
+      </motion.div>
     </div>
   );
 };
