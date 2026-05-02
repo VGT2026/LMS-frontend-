@@ -86,7 +86,9 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<
         window.dispatchEvent(new CustomEvent('auth:sessionExpired', { detail: { message } }));
         window.location.href = '/login';
       }
-      throw new Error(message);
+      const err = new Error(message) as Error & { status?: number };
+      err.status = response.status;
+      throw err;
     }
 
     return await response.json();
@@ -618,18 +620,31 @@ export const supportAPI = {
     });
   },
 
-  /** Admin list: tries GET /support/tickets, then GET /support/issues if the first route errors (backend variance). */
+  /** Admin list: GET /support/tickets; fallback to /support/issues only on 404 (not when tickets returns 5xx). */
   listTicketsForAdmin: async (params?: { limit?: number }) => {
     const limit = params?.limit ?? 10;
     const q = `?limit=${encodeURIComponent(String(limit))}`;
+    let ticketsErr: unknown;
     try {
       const res = await apiRequest(`/support/tickets${q}`);
       const data = res?.data ?? res;
       return Array.isArray(data?.tickets) ? data.tickets : [];
-    } catch {
-      const res = await apiRequest(`/support/issues${q}`);
-      const data = res?.data ?? res;
-      return Array.isArray(data?.tickets) ? data.tickets : [];
+    } catch (e) {
+      ticketsErr = e;
+      const status = typeof e === "object" && e !== null && "status" in e ? Number((e as { status?: number }).status) : NaN;
+      if (status === 404) {
+        try {
+          const res = await apiRequest(`/support/issues${q}`);
+          const data = res?.data ?? res;
+          return Array.isArray(data?.tickets) ? data.tickets : [];
+        } catch {
+          const orig = ticketsErr instanceof Error ? ticketsErr.message : "Unknown error";
+          throw new Error(
+            `Support list unavailable: neither GET /support/tickets nor /support/issues is available (${orig}).`
+          );
+        }
+      }
+      throw ticketsErr instanceof Error ? ticketsErr : new Error(String(ticketsErr));
     }
   },
 };
