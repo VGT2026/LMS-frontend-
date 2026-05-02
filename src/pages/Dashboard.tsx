@@ -17,6 +17,8 @@ const fadeUp = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transi
 import { RecommendationSection } from "@/components/dashboard/RecommendationSection";
 import { RoadmapProgress } from "@/components/dashboard/RoadmapProgress";
 
+const DEFAULT_COURSE_IMAGE = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&h=500&fit=crop";
+
 const Dashboard = () => {
   const { user, updateUser } = useAuth();
   const { assignments, loading: assignmentsLoading } = useAssignments();
@@ -263,7 +265,15 @@ const Dashboard = () => {
                     <CardWrapper key={course?.id ?? `e-${idx}`} {...cardProps} className={isDeactivated ? "cursor-not-allowed opacity-75" : "group"}>
                       <div className="bg-card rounded-xl overflow-hidden border border-border shadow-card hover:shadow-elevated transition-all duration-300">
                         <div className="h-32 overflow-hidden bg-muted relative">
-                          <img src={course?.thumbnail || "https://placehold.co/400x200?text=Course"} alt={course?.title || "Course"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                          <img
+                            src={course?.thumbnail || DEFAULT_COURSE_IMAGE}
+                            alt={course?.title || "Course"}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            onError={(e) => {
+                              const img = e.currentTarget;
+                              if (img.src !== DEFAULT_COURSE_IMAGE) img.src = DEFAULT_COURSE_IMAGE;
+                            }}
+                          />
                           {isDeactivated && (
                             <span className="absolute top-2 right-2 px-2 py-1 rounded-md bg-destructive/90 text-xs font-semibold text-destructive-foreground">Deactivated</span>
                           )}
@@ -313,7 +323,15 @@ const Dashboard = () => {
                           <CardWrapper key={course?.id ?? `a-${idx}`} {...cardProps} className={isDeactivated ? "cursor-not-allowed opacity-75" : "group"}>
                             <div className="bg-card rounded-xl overflow-hidden border border-border shadow-card hover:shadow-elevated transition-all duration-300">
                               <div className="h-32 overflow-hidden bg-muted relative">
-                                <img src={course?.thumbnail || "https://placehold.co/400x200?text=Course"} alt={course?.title || "Course"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                <img
+                                  src={course?.thumbnail || DEFAULT_COURSE_IMAGE}
+                                  alt={course?.title || "Course"}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                  onError={(e) => {
+                                    const img = e.currentTarget;
+                                    if (img.src !== DEFAULT_COURSE_IMAGE) img.src = DEFAULT_COURSE_IMAGE;
+                                  }}
+                                />
                                 {isDeactivated && (
                                   <span className="absolute top-2 right-2 px-2 py-1 rounded-md bg-muted text-xs font-semibold text-muted-foreground flex items-center gap-1">
                                     <Lock className="w-3 h-3" /> Locked
@@ -535,7 +553,15 @@ const Dashboard = () => {
             <Link key={course?.id ?? `ic-${idx}`} to={`/instructor/course/${course?.id}`} className="group">
               <div className="bg-card rounded-xl overflow-hidden border border-border shadow-card hover:shadow-elevated transition-all duration-300">
                 <div className="h-32 overflow-hidden bg-muted">
-                  <img src={course?.thumbnail || "https://placehold.co/400x200?text=Course"} alt={course?.title || "Course"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <img
+                    src={course?.thumbnail || DEFAULT_COURSE_IMAGE}
+                    alt={course?.title || "Course"}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onError={(e) => {
+                      const img = e.currentTarget;
+                      if (img.src !== DEFAULT_COURSE_IMAGE) img.src = DEFAULT_COURSE_IMAGE;
+                    }}
+                  />
                 </div>
                 <div className="p-4">
                   <span className="text-xs font-medium text-accent">{course?.category || ""}</span>
@@ -632,7 +658,15 @@ const Dashboard = () => {
           {(userCourses || []).slice(0, 4).map((course, idx) => (
             <div key={course?.id ?? `ac-${idx}`} className="bg-card rounded-xl overflow-hidden border border-border shadow-card">
               <div className="h-32 overflow-hidden bg-muted">
-                <img src={course?.thumbnail || "https://placehold.co/400x200?text=Course"} alt={course?.title || "Course"} className="w-full h-full object-cover" />
+                <img
+                  src={course?.thumbnail || DEFAULT_COURSE_IMAGE}
+                  alt={course?.title || "Course"}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const img = e.currentTarget;
+                    if (img.src !== DEFAULT_COURSE_IMAGE) img.src = DEFAULT_COURSE_IMAGE;
+                  }}
+                />
               </div>
               <div className="p-4">
                 <span className="text-xs font-medium text-accent">{course?.category || ""}</span>

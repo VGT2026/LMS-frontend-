@@ -11,6 +11,7 @@ interface RecommendationSectionProps {
 }
 
 const fadeUp = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
+const DEFAULT_COURSE_IMAGE = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&h=500&fit=crop";
 
 export const RecommendationSection = ({ user, courses: propCourses, enrolledCourses = [] }: RecommendationSectionProps) => {
     if (!user) return null;
@@ -59,11 +60,19 @@ export const RecommendationSection = ({ user, courses: propCourses, enrolledCour
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {recommendedCourses.map((course, idx) => (
                     <Link key={course?.id ?? idx} to={`/course/${course?.id}`} className="group">
-                        <div className="bg-card rounded-xl p-4 border border-border shadow-card hover:shadow-elevated transition-all duration-300 flex gap-4">
-                            <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
-                                <img src={course?.thumbnail || "https://placehold.co/80x80?text=Course"} alt={course?.title || "Course"} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                        <div className="bg-card rounded-xl overflow-hidden border border-border shadow-card hover:shadow-elevated transition-all duration-300">
+                            <div className="h-32 overflow-hidden bg-muted">
+                                <img
+                                    src={course?.thumbnail || DEFAULT_COURSE_IMAGE}
+                                    alt={course?.title || "Course"}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    onError={(e) => {
+                                        const img = e.currentTarget;
+                                        if (img.src !== DEFAULT_COURSE_IMAGE) img.src = DEFAULT_COURSE_IMAGE;
+                                    }}
+                                />
                             </div>
-                            <div className="min-w-0 flex flex-col justify-center">
+                            <div className="p-4 min-w-0 flex flex-col justify-center">
                                 <span className="text-[10px] font-bold uppercase tracking-wider text-accent">{course?.category || ""}</span>
                                 <h3 className="font-semibold text-foreground text-sm line-clamp-1 mt-0.5">{course?.title || "Course"}</h3>
                                 <div className="flex items-center gap-2 mt-1 text-muted-foreground">
