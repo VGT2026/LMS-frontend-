@@ -74,9 +74,10 @@ const AdminCoursesPage = () => {
 
     const fetchInstructors = async () => {
         try {
-            const response = await authAPI.getAllUsers({ role: "instructor", limit: 100 });
-            const list = response?.data ?? [];
-            const active = Array.isArray(list) ? list.filter((i: Instructor) => i.is_active !== false) : [];
+            const list = await authAPI.fetchInstructorsList();
+            const active = Array.isArray(list)
+                ? (list as Instructor[]).filter((i) => i && i.is_active !== false)
+                : [];
             setInstructors(active);
         } catch (error) {
             console.error("Failed to fetch instructors:", error);

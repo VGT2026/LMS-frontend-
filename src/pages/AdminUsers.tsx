@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { authAPI } from "@/services/api";
+import { authAPI, normalizeUsersList } from "@/services/api";
 import { Users, UserCheck, UserX, Search, Shield, GraduationCap, BookOpen, UserPlus } from "lucide-react";
 
 const roleIcons: Record<string, typeof Shield> = { admin: Shield, instructor: GraduationCap, student: BookOpen };
@@ -34,33 +34,47 @@ const AdminUsersPage = () => {
         const fetchUsers = async () => {
             try {
                 setLoading(true);
-                const response = await authAPI.getAllUsers({ limit: 1000 });
-                if (response.success && response.data) {
-                    // Transform API response to match frontend expectations
-                    const transformedUsers = response.data.map((user: any) => ({
-                        id: user.id.toString(),
-                        name: user.name,
-                        email: user.email,
-                        role: user.role,
-                        status: user.is_active ? "active" : "inactive",
-                        enrolled: Number(user.enrolled ?? 0),
-                        avatar: user.avatar,
-                    }));
-                    setUsersData(transformedUsers);
-                } else {
+                const response = await authAPI.getAllUsersWithRetries({ limit: 1000 });
+
+                if (
+                    response &&
+                    typeof response === "object" &&
+                    "success" in response &&
+                    (response as { success: unknown }).success === false
+                ) {
+                    const msg =
+                        typeof (response as { message?: string }).message === "string"
+                            ? (response as { message: string }).message
+                            : "Could not load users.";
                     toast({
-                        title: "Error",
-                        description: "Failed to load users",
+                        title: "Could not load users",
+                        description: msg,
                         variant: "destructive",
                     });
+                    setUsersData([]);
+                    return;
                 }
+
+                const rows = normalizeUsersList(response);
+                const transformedUsers = rows.map((user: any) => ({
+                    id: String(user?.id ?? ""),
+                    name: user?.name,
+                    email: user?.email,
+                    role: user?.role,
+                    status: user?.is_active ? "active" : "inactive",
+                    enrolled: Number(user?.enrolled ?? 0),
+                    avatar: user?.avatar,
+                }));
+                setUsersData(transformedUsers);
             } catch (error) {
-                console.error('Failed to fetch users:', error);
+                console.error("Failed to fetch users:", error);
+                const msg = error instanceof Error ? error.message : "Failed to load users";
                 toast({
-                    title: "Error",
-                    description: "Failed to load users",
+                    title: "Could not load users",
+                    description: msg,
                     variant: "destructive",
                 });
+                setUsersData([]);
             } finally {
                 setLoading(false);
             }

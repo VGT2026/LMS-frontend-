@@ -37,15 +37,20 @@ const AdminCreateCoursePage = () => {
         const fetchInstructors = async () => {
             try {
                 setLoadingInstructors(true);
-                // Use getAllUsers with role filter - same API that loads Admin Users list
-                const response = await authAPI.getAllUsers({ role: "instructor", limit: 100 });
-                const list = response?.data ?? [];
-                const active = Array.isArray(list) ? list.filter((i: Instructor) => i.is_active !== false) : [];
+                const list = await authAPI.fetchInstructorsList();
+                const typed = Array.isArray(list) ? (list as Instructor[]) : [];
+                const active = typed.filter((i) => i && i.is_active !== false);
                 setInstructors(active);
             } catch (error) {
-                console.error('Failed to fetch instructors:', error);
+                console.error("Failed to fetch instructors:", error);
                 setInstructors([]);
-                toast({ title: "Error", description: "Failed to load instructors. Ensure you're logged in as admin.", variant: "destructive" });
+                const apiMsg = error instanceof Error ? error.message : "Request failed";
+                toast({
+                    title: "Could not load instructors",
+                    description:
+                        `${apiMsg} Uses GET /auth/admin/users?role=instructor or GET /auth/admin/instructors — check API logs if you are already signed in as admin.`,
+                    variant: "destructive",
+                });
             } finally {
                 setLoadingInstructors(false);
             }

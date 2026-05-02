@@ -72,6 +72,23 @@ export function normalizeCoursesList(response: unknown): unknown[] {
   return [];
 }
 
+/** Users from GET /auth/admin/users — backends vary (`data`, `users`, nested). */
+export function normalizeUsersList(response: unknown): unknown[] {
+  if (response == null) return [];
+  if (Array.isArray(response)) return response;
+  if (typeof response !== "object") return [];
+  const r = response as Record<string, unknown>;
+  if (Array.isArray(r.data)) return r.data;
+  if (Array.isArray(r.users)) return r.users;
+  if (Array.isArray(r.instructors)) return r.instructors;
+  if (r.data && typeof r.data === "object") {
+    const inner = r.data as Record<string, unknown>;
+    if (Array.isArray(inner.users)) return inner.users;
+    if (Array.isArray(inner.instructors)) return inner.instructors;
+  }
+  return [];
+}
+
 // Generic API request function
 const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<any> => {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -188,7 +205,68 @@ export const authAPI = {
     return apiRequest(`/auth/admin/users?${searchParams.toString()}`);
   },
 
+  /** Retries alternate pagination when GET /auth/admin/users returns 500 for large limits. */
+  getAllUsersWithRetries: async (params?: {
+    page?: number;
+    limit?: number;
+    role?: string;
+    search?: string;
+  }) => {
+    const p = params ?? {};
+    try {
+      return await authAPI.getAllUsers(p);
+    } catch (e1) {
+      if (readHttpStatus(e1) !== 500) throw e1;
+      try {
+        return await authAPI.getAllUsers({ ...p, page: p.page ?? 1 });
+      } catch (e2) {
+        if (readHttpStatus(e2) !== 500) throw e2;
+        const fallbackLimit =
+          typeof p.limit === "number" ? Math.min(500, Math.max(1, p.limit)) : 100;
+        return await authAPI.getAllUsers({ ...p, page: 1, limit: fallbackLimit });
+      }
+    }
+  },
+
   getInstructors: () => apiRequest('/auth/admin/instructors'),
+
+  /**
+   * Instructor pickers: prefer users list with role filter; if it fails or returns empty, try dedicated instructors route.
+   */
+  fetchInstructorsList: async (): Promise<unknown[]> => {
+    let primaryError: unknown;
+    try {
+      const res = await authAPI.getAllUsersWithRetries({ role: "instructor", limit: 100 });
+      if (
+        res &&
+        typeof res === "object" &&
+        "success" in res &&
+        (res as { success: unknown }).success === false
+      ) {
+        throw new Error(String((res as { message?: string }).message || "admin users request failed"));
+      }
+      const fromUsers = normalizeUsersList(res);
+      if (fromUsers.length > 0) return fromUsers;
+    } catch (e) {
+      primaryError = e;
+    }
+
+    try {
+      const res2 = await authAPI.getInstructors();
+      if (
+        res2 &&
+        typeof res2 === "object" &&
+        "success" in res2 &&
+        (res2 as { success: unknown }).success === false
+      ) {
+        throw new Error(String((res2 as { message?: string }).message || "instructors request failed"));
+      }
+      return normalizeUsersList(res2);
+    } catch (e2) {
+      if (primaryError instanceof Error) throw primaryError;
+      throw e2 instanceof Error ? e2 : new Error(String(e2));
+    }
+  },
 
   toggleUserStatus: (userId: number) =>
     apiRequest(`/auth/admin/users/${userId}/toggle-status`, {
