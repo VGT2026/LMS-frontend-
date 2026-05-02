@@ -43,7 +43,18 @@ interface RoadmapCourse {
     title: string;
     description: string;
     duration?: string;
+    thumbnail?: string;
 }
+
+const roleImageByTitle: Record<string, string> = {
+    "Full Stack Developer": "https://images.unsplash.com/photo-1517180102446-f3ece451e9d8?w=1200&h=700&fit=crop",
+    "Data Scientist": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=700&fit=crop",
+    "Cloud Architect": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=700&fit=crop",
+};
+
+const getRoleImage = (roleTitle: string) =>
+    roleImageByTitle[roleTitle] ||
+    "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=1200&h=700&fit=crop";
 
 const CareerRoadmap = () => {
     const { user, updateUser } = useAuth();
@@ -76,16 +87,21 @@ const CareerRoadmap = () => {
                         <button
                             key={role.id}
                             onClick={() => selectRole(role.id)}
-                            className="p-6 rounded-2xl border border-border bg-card hover:border-primary hover:bg-primary/5 transition-all text-left group"
+                            className="relative overflow-hidden p-6 rounded-2xl border border-border bg-card hover:border-primary transition-all text-left group"
                         >
+                            <div
+                                className="absolute inset-0 bg-cover bg-center opacity-20 group-hover:opacity-35 transition-opacity"
+                                style={{ backgroundImage: `url(${getRoleImage(role.title)})` }}
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-tr from-background via-background/80 to-transparent" />
                             <div className="flex items-center justify-between mb-3">
-                                <div className="p-2 rounded-lg bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                                <div className="relative z-10 p-2 rounded-lg bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                                     <Briefcase className="w-5 h-5" />
                                 </div>
-                                <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transform group-hover:translate-x-1 transition-all" />
+                                <ArrowRight className="relative z-10 w-4 h-4 text-muted-foreground group-hover:text-primary transform group-hover:translate-x-1 transition-all" />
                             </div>
-                            <h3 className="font-bold text-foreground mb-1">{role.title}</h3>
-                            <p className="text-xs text-muted-foreground line-clamp-2">{role.description}</p>
+                            <h3 className="relative z-10 font-bold text-foreground mb-1">{role.title}</h3>
+                            <p className="relative z-10 text-xs text-muted-foreground line-clamp-2">{role.description}</p>
                         </button>
                     ))}
                 </div>
@@ -103,12 +119,14 @@ const CareerRoadmap = () => {
             id: found.id,
             title: found.title,
             description: found.description,
-            duration: (found as { duration?: string }).duration || "12 weeks"
+            duration: (found as { duration?: string }).duration || "12 weeks",
+            thumbnail: (found as { thumbnail?: string }).thumbnail,
         } : {
             id,
             title: "Specialized Module",
             description: "Advanced topic specific to your career path.",
-            duration: "10 weeks"
+            duration: "10 weeks",
+            thumbnail: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&h=700&fit=crop",
         };
     });
 
@@ -169,7 +187,12 @@ const CareerRoadmap = () => {
             className="max-w-6xl mx-auto space-y-8 pb-12 px-4 sm:px-6"
         >
             <section className="relative overflow-hidden rounded-[2.5rem] bg-[#0A0A0B] text-white p-8 lg:p-14 shadow-2xl border border-white/5">
+                <div
+                    className="absolute inset-0 bg-cover bg-center opacity-20"
+                    style={{ backgroundImage: `url(${getRoleImage(jobRole.title)})` }}
+                />
                 <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-primary/20 to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/60 to-black/80 pointer-events-none" />
                 <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-primary/10 rounded-full blur-[120px]" />
 
                 <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-12">
@@ -198,12 +221,17 @@ const CareerRoadmap = () => {
                                             <button
                                                 key={role.id}
                                                 onClick={() => handleRoleChange(role.id)}
-                                                className={`flex items-start gap-4 p-5 rounded-2xl border transition-all text-left hover:bg-white/5 group ${user.targetJobRoleId === role.id ? 'border-primary bg-primary/10' : 'border-white/5 bg-white/5'}`}
+                                                className={`relative overflow-hidden flex items-start gap-4 p-5 rounded-2xl border transition-all text-left hover:bg-white/5 group ${user.targetJobRoleId === role.id ? 'border-primary bg-primary/10' : 'border-white/5 bg-white/5'}`}
                                             >
+                                                <div
+                                                    className="absolute inset-0 bg-cover bg-center opacity-15 group-hover:opacity-25 transition-opacity"
+                                                    style={{ backgroundImage: `url(${getRoleImage(role.title)})` }}
+                                                />
+                                                <div className="absolute inset-0 bg-gradient-to-r from-[#121214] via-[#121214]/85 to-transparent" />
                                                 <div className={`mt-1 p-2.5 rounded-xl ${user.targetJobRoleId === role.id ? 'bg-primary text-white' : 'bg-white/5 text-white/40 group-hover:text-white transition-colors'}`}>
                                                     <Briefcase className="w-5 h-5" />
                                                 </div>
-                                                <div className="flex-1">
+                                                <div className="relative z-10 flex-1">
                                                     <div className="flex items-center justify-between pb-1">
                                                         <p className="font-bold text-lg">{role.title}</p>
                                                         {user.targetJobRoleId === role.id && <CheckCircle2 className="w-5 h-5 text-primary" />}
@@ -295,13 +323,27 @@ const CareerRoadmap = () => {
                                     </div>
 
                                     <div className={`rounded-[2rem] border transition-all duration-500 overflow-hidden ${isCompleted ? "bg-card/50 border-success/20 opacity-80" : isNext ? "bg-card border-primary shadow-2xl ring-4 ring-primary/5" : "bg-muted/20 border-border"}`}>
+                                        <div className="relative h-36 sm:h-44 border-b border-border/60 overflow-hidden">
+                                            <img
+                                                src={course.thumbnail || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&h=700&fit=crop"}
+                                                alt={course.title}
+                                                className={`w-full h-full object-cover transition-transform duration-500 ${isLocked ? "grayscale opacity-50" : "group-hover:scale-105"}`}
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/25 to-transparent" />
+                                            <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between">
+                                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">
+                                                    {String(index + 1).padStart(2, "0")} - Module
+                                                </span>
+                                                {isNext && (
+                                                    <span className="px-2 py-0.5 rounded bg-primary/20 text-white text-[10px] font-black uppercase border border-primary/40">
+                                                        Live Track
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
                                         <div className="p-8">
                                             <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
                                                 <div className="space-y-3">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">{String(index + 1).padStart(2, '0')} — Module</span>
-                                                        {isNext && <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-black uppercase">Live Track</span>}
-                                                    </div>
                                                     <h3 className={`text-2xl font-bold tracking-tight ${isLocked ? "text-muted-foreground" : "text-foreground"}`}>{course.title}</h3>
                                                     <p className="text-muted-foreground leading-relaxed max-w-xl">{course.description}</p>
                                                 </div>
