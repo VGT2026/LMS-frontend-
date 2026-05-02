@@ -622,6 +622,64 @@ export const assignmentAPI = {
     }),
 };
 
+/**
+ * Unwrap nested API bodies and map quiz question fields (`question`/`prompt`/options)
+ * so student exam flows see a consistent `questions[]` shape.
+ */
+export function normalizeQuizExamResponse(raw: unknown): any {
+  if (raw == null || typeof raw !== "object") return raw;
+  const wrapper = raw as Record<string, any>;
+  const root =
+    wrapper.data != null && typeof wrapper.data === "object" && !Array.isArray(wrapper.data)
+      ? ({ ...wrapper.data } as Record<string, any>)
+      : ({ ...wrapper } as Record<string, any>);
+
+  const rawList =
+    root.questions ?? root.exam_questions ?? root.examQuestions ?? [];
+  const arr = Array.isArray(rawList) ? rawList : [];
+
+  root.questions = arr.map((q: any, idx: number) => {
+    const id = q?.id ?? q?.question_id ?? idx;
+    const text = String(q?.prompt ?? q?.question ?? q?.text ?? q?.stem ?? "").trim();
+    let opts = q?.options ?? q?.choices ?? [];
+    if (!Array.isArray(opts)) opts = [];
+
+    const options = opts.map((o: unknown) => {
+      if (typeof o === "string") return o;
+      if (o != null && typeof o === "object" && "text" in (o as object))
+        return String((o as { text?: string }).text ?? "");
+      return String(o ?? "");
+    });
+
+    const typeRaw = String(q?.type ?? q?.question_type ?? "");
+    const type: "multiple_choice" | "short_answer" =
+      typeRaw === "short_answer" || typeRaw === "short-answer"
+        ? "short_answer"
+        : options.length > 0
+          ? "multiple_choice"
+          : q?.correct_answer != null || q?.model_answer != null
+            ? "short_answer"
+            : "multiple_choice";
+
+    return {
+      ...q,
+      id,
+      prompt: text,
+      question: text,
+      options,
+      type,
+      points: q?.points ?? q?.score,
+    };
+  });
+
+  return root;
+}
+
+/** API error indicates the quiz row exists but has no questions populated yet. */
+export function isExamMissingQuestionsMessage(message: string): boolean {
+  return /\bno questions\b|\bquestions configured\b|not .*configured.*question/i.test(message);
+}
+
 // Quiz API functions
 export const quizAPI = {
   list: (params?: { courseId?: string }) => {
@@ -668,7 +726,8 @@ export const quizAPI = {
     apiRequest(`/quizzes/${id}`, { method: 'DELETE' }),
 
   /** Student: exam shell + questions (no correct answers) */
-  getExam: (quizId: string | number) => apiRequest(`/quizzes/${quizId}/exam`),
+  getExam: (quizId: string | number) =>
+    apiRequest(`/quizzes/${quizId}/exam`).then(normalizeQuizExamResponse),
 
   /** Student: begin attempt; timer starts server-side */
   startExam: (quizId: string | number, tabLockId?: string) =>

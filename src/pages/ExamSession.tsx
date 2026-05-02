@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { quizAPI, quizAttemptAPI } from "@/services/api";
+import { quizAPI, quizAttemptAPI, isExamMissingQuestionsMessage } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
   Calendar,
   CheckCircle,
   Clock,
+  Info,
   Loader2,
   Maximize,
   Shield,
@@ -24,6 +25,17 @@ import {
 import { ExamProctor } from "@/components/exam/ExamProctor";
 
 type ExamQuestion = { id: string; prompt: string; options: string[]; points?: number };
+
+/** Map normalized API question `{ prompt, question, options[] }` to exam UI. */
+function examQuestionsFromPayload(list: unknown): ExamQuestion[] {
+  if (!Array.isArray(list)) return [];
+  return list.map((q: any, idx: number) => ({
+    id: String(q?.id ?? `q-${idx}`),
+    prompt: String(q?.prompt ?? q?.question ?? "").trim(),
+    options: Array.isArray(q?.options) ? q.options.map((o: unknown) => String(o)) : [],
+    points: typeof q?.points === "number" ? q.points : undefined,
+  }));
+}
 
 function formatDuration(min: number) {
   if (min >= 60) {
@@ -97,7 +109,7 @@ const ExamSession = () => {
       const res = await quizAPI.getExam(quizId);
       const data = res?.data ?? res;
       setShell(data);
-      setQuestions(data?.questions ?? []);
+      setQuestions(examQuestionsFromPayload(data?.questions ?? []));
       if (data?.lastSubmitted && !data?.resume) {
         setPhase("result");
         setResult({
@@ -116,7 +128,29 @@ const ExamSession = () => {
         setPhase("exam");
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load exam");
+      const msg = e instanceof Error ? e.message : "Failed to load exam";
+      if (isExamMissingQuestionsMessage(msg)) {
+        setError(null);
+        try {
+          const meta = await quizAPI.getById(quizId);
+          const m = meta?.data ?? meta;
+          setShell({
+            quiz: {
+              title: m?.title ?? "Exam",
+              course_title: m?.course_title ?? m?.courseName ?? "Course",
+              time_limit_minutes: m?.time_limit ?? m?.time_limit_minutes,
+              total_points: m?.total_points,
+            },
+            questions: [],
+          });
+          setQuestions([]);
+        } catch {
+          setShell({ quiz: { title: "Exam", course_title: "Course" }, questions: [] });
+          setQuestions([]);
+        }
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -499,13 +533,13 @@ const ExamSession = () => {
 
   if (error && !shell) {
     return (
-      <div className="mx-auto max-w-lg p-6">
+      <div className="mx-auto max-w-lg p-6 space-y-4">
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-        <Button asChild className="mt-4" variant="outline">
+        <Button asChild variant="outline">
           <Link to="/courses">Back to courses</Link>
         </Button>
       </div>
@@ -513,6 +547,14 @@ const ExamSession = () => {
   }
 
   const qz = shell?.quiz;
+
+  const examMissingQuestionsBlocking =
+    !loading &&
+    phase === "intro" &&
+    questions.length === 0 &&
+    !!shell &&
+    !shell.lastSubmitted &&
+    !shell.resume;
 
   /* Result only (already submitted) */
   if (phase === "result" && result && !review.length) {
@@ -601,6 +643,33 @@ const ExamSession = () => {
 
   /* Intro gate */
   if (phase === "intro") {
+    if (examMissingQuestionsBlocking) {
+      return (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto max-w-lg space-y-6 p-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>This exam isn’t ready yet</CardTitle>
+              <CardDescription>{qz?.title ?? "Exam"} — {qz?.course_title ?? "Course"}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>No questions configured</AlertTitle>
+                <AlertDescription>
+                  This exam has no questions yet. Please check back later, or contact your instructor if something looks wrong.
+                </AlertDescription>
+              </Alert>
+              <Button asChild variant="outline" className="w-full">
+                <Link to="/courses">
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back to courses
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      );
+    }
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto max-w-2xl space-y-6">
         <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/5 to-card p-8 shadow-card">

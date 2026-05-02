@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, XCircle, Clock, ArrowLeft, ArrowRight, AlertTriangle, Loader2, AlertCircle } from "lucide-react";
+import { CheckCircle, XCircle, Clock, ArrowLeft, ArrowRight, AlertTriangle, Loader2, AlertCircle, Info } from "lucide-react";
 import { quizAPI, quizAttemptAPI } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -92,6 +92,12 @@ const Quiz = () => {
         const examData = examRes?.data || examRes;
         console.log("📋 Quiz loaded:", examData);
         setQuiz(examData);
+
+        const questionCount = examData?.questions?.length ?? 0;
+        if (!questionCount) {
+          setAttempt(null);
+          return;
+        }
 
         // If student already has an attempt, load it
         if (examData.current_attempt) {
@@ -242,13 +248,44 @@ const Quiz = () => {
     );
   }
 
-  if (!quiz || !attempt) {
+  if (!quiz) {
     return (
       <div className="max-w-2xl mx-auto">
         <div className="bg-card rounded-xl p-8 border border-border shadow-card text-center">
           <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">Quiz not found or could not be loaded.</p>
           <Button onClick={() => navigate(`/courses/${courseId}`)} className="mt-6">
+            Back to Course
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if ((quiz.questions?.length ?? 0) === 0) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-card rounded-xl p-8 border border-border shadow-card text-center space-y-3">
+          <Info className="w-12 h-12 text-primary mx-auto" />
+          <h2 className="text-lg font-semibold text-foreground">This quiz isn’t ready yet</h2>
+          <p className="text-muted-foreground text-sm max-w-md mx-auto">
+            This exam has no questions configured yet. Your instructor needs to add questions before you can take it.
+          </p>
+          <Button onClick={() => navigate(courseId ? `/courses/${courseId}` : "/courses")} className="mt-4">
+            Back to course
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!attempt) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-card rounded-xl p-8 border border-border shadow-card text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">Preparing your quiz attempt…</p>
+          <Button variant="outline" onClick={() => navigate(courseId ? `/courses/${courseId}` : "/courses")} className="mt-6">
             Back to Course
           </Button>
         </div>
@@ -398,11 +435,14 @@ const Quiz = () => {
     );
   }
 
-  // Quiz taking screen
+  // Quiz taking screen (fallback if question index is invalid)
   if (!q) {
     return (
-      <div className="text-center text-muted-foreground">
-        No questions available
+      <div className="max-w-2xl mx-auto text-center space-y-3 text-muted-foreground">
+        <p>No question is available at this position.</p>
+        <Button onClick={() => navigate(courseId ? `/courses/${courseId}` : "/courses")}>
+          Back to course
+        </Button>
       </div>
     );
   }
