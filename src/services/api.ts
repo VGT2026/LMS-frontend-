@@ -1,25 +1,31 @@
 // API service functions for LMS frontend
-// In dev, use relative /api (proxied by Vite to backend); in prod use full URL.
-// If VITE_API_URL is "http://localhost:3001" (no /api), requests would go to /auth/... → 404.
-// We append /api only for origin-style URLs; leave custom paths unchanged.
-function getApiBaseUrl(): string {
+// Dev: omit VITE_API_URL to send requests to `/api` (proxied via VITE_DEV_PROXY_TARGET when set).
+// Production builds must set VITE_API_URL to your deployed API origin (baked in at build time).
+// Appends `/api` for bare origins; preserves custom URL paths unchanged.
+export function resolveApiBaseUrl(): string {
   const raw = import.meta.env.VITE_API_URL?.trim();
-  if (!raw) {
-    return import.meta.env.DEV ? "/api" : "/api";
+  if (raw) {
+    const base = raw.replace(/\/$/, "");
+    if (base.endsWith("/api")) return base;
+    try {
+      const parsed = new URL(base.includes("://") ? base : `https://${base}`);
+      const path = parsed.pathname.replace(/\/$/, "") || "";
+      if (path && path !== "/") return base;
+    } catch {
+      /* fall through */
+    }
+    return `${base}/api`;
   }
-  const base = raw.replace(/\/$/, "");
-  if (base.endsWith("/api")) return base;
-  try {
-    const parsed = new URL(base.includes("://") ? base : `http://${base}`);
-    const path = parsed.pathname.replace(/\/$/, "") || "";
-    if (path && path !== "/") return base;
-  } catch {
-    /* fall through */
+  if (import.meta.env.DEV) {
+    return "/api";
   }
-  return `${base}/api`;
+  console.error(
+    "[LMS] Missing VITE_API_URL. Production bundles require this at build time (e.g. your Railway / API HTTPS origin)."
+  );
+  throw new Error("VITE_API_URL must be set for production builds.");
 }
 
-const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = resolveApiBaseUrl();
 
 // Helper function to get auth token (checks both localStorage and sessionStorage for Remember me)
 const getAuthToken = (): string | null => {

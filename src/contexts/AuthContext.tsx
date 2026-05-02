@@ -10,7 +10,7 @@ import {
   EmailAuthProvider,
   type User as FirebaseUser,
 } from "firebase/auth";
-import { authAPI } from "@/services/api";
+import { authAPI, API_BASE_URL } from "@/services/api";
 
 export type UserRole = "student" | "instructor" | "admin";
 
@@ -260,25 +260,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => window.removeEventListener('auth:sessionExpired', handleSessionExpired);
   }, []);
 
-  const API_URL = (() => {
-    const raw = import.meta.env.VITE_API_URL?.trim();
-    if (!raw) return import.meta.env.DEV ? "/api" : "/api";
-    const base = raw.replace(/\/$/, "");
-    if (base.endsWith("/api")) return base;
-    // If it's an origin like "http://localhost:3001", append "/api"
-    try {
-      const parsed = new URL(base.includes("://") ? base : `http://${base}`);
-      if (parsed.pathname && parsed.pathname !== "/") return base;
-    } catch {
-      // ignore
-    }
-    return `${base}/api`;
-  })();
-
   const login = async (email: string, password: string, rememberMe = true): Promise<{ success: boolean; message?: string; user?: User }> => {
     setAuthLoading(true);
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -314,7 +299,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (typeof msg === 'string') {
         if (code === 'auth/unauthorized-domain' || msg.includes('auth/unauthorized-domain')) {
-          return { success: false, message: 'Unauthorized Firebase domain. Use http://localhost:8080 or add your domain in Firebase Auth → Settings → Authorized domains.' };
+          return { success: false, message: 'Unauthorized Firebase domain. Add your app\'s hostname in Firebase Console → Authentication → Settings → Authorized domains.' };
         }
         if (code === 'auth/operation-not-allowed' || msg.includes('auth/operation-not-allowed')) {
           return { success: false, message: 'Firebase Email/Password sign-in is disabled. Enable it in Firebase Console → Authentication.' };
