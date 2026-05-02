@@ -553,7 +553,7 @@ export const dashboardAPI = {
   },
 };
 
-// Support tickets (authenticated users submit; admins can list)
+// Support tickets / issues (authenticated users submit; admins can list)
 export const supportAPI = {
   submitTicket: (body: { subject: string; category: string; message: string }) =>
     apiRequest('/support/tickets', {
@@ -561,9 +561,25 @@ export const supportAPI = {
       body: JSON.stringify(body),
     }),
 
+  /** Same as submitTicket — POST /api/support/issues */
+  submitIssue: (body: { subject: string; category: string; message: string }) =>
+    apiRequest('/support/issues', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   listTickets: (params?: { limit?: number }) => {
     const limit = params?.limit ?? 10;
     return apiRequest(`/support/tickets?limit=${encodeURIComponent(String(limit))}`).then((res) => {
+      const data = res?.data ?? res;
+      return data?.tickets ?? [];
+    });
+  },
+
+  /** Same as listTickets — GET /api/support/issues (admin) */
+  listIssues: (params?: { limit?: number }) => {
+    const limit = params?.limit ?? 10;
+    return apiRequest(`/support/issues?limit=${encodeURIComponent(String(limit))}`).then((res) => {
       const data = res?.data ?? res;
       return data?.tickets ?? [];
     });
