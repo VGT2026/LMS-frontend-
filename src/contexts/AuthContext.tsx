@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useRe
 import { auth, isFirebaseConfigured } from "@/lib/firebase";
 import {
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   sendPasswordResetEmail as firebaseSendPasswordResetEmail,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -344,22 +343,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const register = async (name: string, email: string, password: string, confirmPassword: string): Promise<{ success: boolean; message?: string; user?: User }> => {
     setAuthLoading(true);
     try {
-      if (isFirebaseConfigured && auth) {
-        if (password !== confirmPassword) return { success: false, message: 'Passwords do not match' };
-        if (password.length < 6) return { success: false, message: 'Password must be at least 6 characters' };
-        pendingFirebaseSyncOverridesRef.current = {
-          email: email.trim().toLowerCase(),
-          remember: true,
-          name: name.trim() || undefined,
-          password,
-          createdAt: Date.now(),
-        };
-        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-        const synced = await syncFirebaseUserToBackend(cred.user, true, name.trim() || undefined, password);
-        if (synced) return { success: true, user: synced };
-        return { success: false, message: lastFirebaseSyncErrorRef.current || 'Registration failed' };
-      }
-
+      // Always register via API (MySQL). Server optionally mirrors to Firebase Admin — avoids
+      // client calls to identitytoolkit signUp (400s when Email/Password or domains are misconfigured).
       const response = await authAPI.register(name, email, password, confirmPassword);
       const data = response?.data ?? response;
       if (response?.success && data?.token && data?.user) {
