@@ -4,7 +4,7 @@ import { Users, BookOpen, DollarSign, TrendingUp, ChevronRight, FileText } from 
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { courseAPI, dashboardAPI, supportAPI } from "@/services/api";
+import { courseAPI, dashboardAPI, normalizeCoursesList, supportAPI } from "@/services/api";
 
 const fadeUp = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
@@ -73,8 +73,8 @@ const AdminDashboard = () => {
 
       if (coursesOutcome.status === "fulfilled") {
         const coursesRes = coursesOutcome.value;
-        const list = coursesRes?.data ?? [];
-        setCourses(Array.isArray(list) ? list : []);
+        const list = normalizeCoursesList(coursesRes);
+        setCourses(Array.isArray(list) ? (list as CourseItem[]) : []);
       } else {
         setCourses([]);
         const msg = coursesOutcome.reason instanceof Error ? coursesOutcome.reason.message : "could not be loaded.";
@@ -83,7 +83,7 @@ const AdminDashboard = () => {
 
       if (ticketsOutcome.status === "fulfilled") {
         const rows = ticketsOutcome.value;
-        setTickets(Array.isArray(rows) ? rows : []);
+        setTickets(Array.isArray(rows) ? (rows as SupportTicketRow[]) : []);
       } else {
         setTickets([]);
         const msg =

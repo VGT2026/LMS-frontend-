@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { authAPI, courseAPI } from "@/services/api";
+import { authAPI, courseAPI, normalizeCoursesList } from "@/services/api";
 import { BookOpen, Search, Users, TrendingUp, ToggleLeft, ToggleRight, UserCheck, Settings, Pencil, PlusCircle, XCircle } from "lucide-react";
 
 interface Instructor {
@@ -55,12 +55,17 @@ const AdminCoursesPage = () => {
     const fetchCourses = async () => {
         try {
             setLoading(true);
-            const response = await courseAPI.getAllCourses({ limit: 100 });
-            const list = response?.data ?? [];
-            setCoursesData(Array.isArray(list) ? list : []);
+            const response = await courseAPI.getAllCoursesWithRetries({ limit: 100 });
+            const list = normalizeCoursesList(response);
+            setCoursesData(Array.isArray(list) ? (list as CourseRow[]) : []);
         } catch (error) {
             console.error("Failed to fetch courses:", error);
-            toast({ title: "Error", description: "Failed to load courses", variant: "destructive" });
+            const msg = error instanceof Error ? error.message : "Failed to load courses";
+            toast({
+                title: "Could not load courses",
+                description: msg,
+                variant: "destructive",
+            });
             setCoursesData([]);
         } finally {
             setLoading(false);

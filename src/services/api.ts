@@ -60,6 +60,18 @@ function normalizeTicketsPayload(res: any): unknown[] {
   return [];
 }
 
+/** Courses list from GET /courses — backends vary (`data`, `courses`, bare array). */
+export function normalizeCoursesList(response: unknown): unknown[] {
+  if (response == null) return [];
+  if (Array.isArray(response)) return response;
+  if (typeof response !== "object") return [];
+  const r = response as Record<string, unknown>;
+  if (Array.isArray(r.data)) return r.data;
+  if (Array.isArray(r.courses)) return r.courses;
+  if (Array.isArray(r.items)) return r.items;
+  return [];
+}
+
 // Generic API request function
 const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<any> => {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -209,27 +221,38 @@ export const courseAPI = {
   },
 
   /**
-   * Admin dashboard course table: retries alternate query shapes if the server errors on `limit` only.
-   * Does not replace fixing the backend — only helps when handlers differ between filters.
+   * If GET /courses returns 500 for one query shape, retry alternate params some APIs expect.
+   * Does not replace fixing the backend.
    */
-  getAdminPreviewCourses: async (limit = 8) => {
+  getAllCoursesWithRetries: async (params?: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    search?: string;
+    instructor_id?: number;
+    is_active?: boolean;
+    include_inactive?: boolean;
+  }) => {
+    const p = params ?? {};
     try {
-      return await courseAPI.getAllCourses({ limit });
+      return await courseAPI.getAllCourses(p);
     } catch (e1) {
-      const st = readHttpStatus(e1);
-      if (st !== 500) throw e1;
+      if (readHttpStatus(e1) !== 500) throw e1;
       try {
-        return await courseAPI.getAllCourses({ limit, include_inactive: true });
-      } catch {
-        /* fall through */
-      }
-      try {
-        return await courseAPI.getAllCourses({ page: 1, limit });
-      } catch {
-        throw e1 instanceof Error ? e1 : new Error(String(e1));
+        return await courseAPI.getAllCourses({ ...p, include_inactive: true });
+      } catch (e2) {
+        if (readHttpStatus(e2) !== 500) throw e2;
+        try {
+          return await courseAPI.getAllCourses({ ...p, page: p.page ?? 1 });
+        } catch {
+          throw e1 instanceof Error ? e1 : new Error(String(e1));
+        }
       }
     }
   },
+
+  /** Admin dashboard snippet — delegates to {@link courseAPI.getAllCoursesWithRetries} */
+  getAdminPreviewCourses: (limit = 8) => courseAPI.getAllCoursesWithRetries({ limit }),
 
   getCourseById: (id: string) => apiRequest(`/courses/${id}`),
 

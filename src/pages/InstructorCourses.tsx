@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Search, Users, Loader2, Globe } from "lucide-react";
-import { authAPI, courseAPI, moduleAPI } from "@/services/api";
+import { authAPI, courseAPI, moduleAPI, normalizeCoursesList } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 
 const statusColors: Record<string, string> = {
@@ -47,8 +47,11 @@ const InstructorCourses = () => {
                     setCourses([]);
                     return;
                 }
-                const coursesRes = await courseAPI.getAllCourses({ instructor_id: userId, limit: 100 });
-                const instructorCourses = coursesRes?.data ?? [];
+                const coursesRes = await courseAPI.getAllCoursesWithRetries({
+                    instructor_id: userId,
+                    limit: 100,
+                });
+                const instructorCourses = normalizeCoursesList(coursesRes);
                 const mapped: CourseItem[] = await Promise.all(
                     instructorCourses.map(async (c: Record<string, unknown>) => {
                         const courseId = String(c.id);

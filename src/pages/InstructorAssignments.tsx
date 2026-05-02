@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAssignments, Question, QuestionType } from "@/contexts/AssignmentContext";
-import { authAPI, courseAPI, assignmentAPI } from "@/services/api";
+import { authAPI, courseAPI, assignmentAPI, normalizeCoursesList } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -96,8 +96,8 @@ const InstructorAssignments = () => {
                     setInstructorCourses([]);
                     return;
                 }
-                const coursesRes = await courseAPI.getAllCourses({ instructor_id: userId, limit: 100 });
-                const list = coursesRes?.data ?? [];
+                const coursesRes = await courseAPI.getAllCoursesWithRetries({ instructor_id: userId, limit: 100 });
+                const list = normalizeCoursesList(coursesRes);
                 setInstructorCourses(
                     Array.isArray(list)
                         ? list.map((c: any) => ({
