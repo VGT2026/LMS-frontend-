@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useRe
 import { auth, isFirebaseConfigured } from "@/lib/firebase";
 import {
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   sendPasswordResetEmail as firebaseSendPasswordResetEmail,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -317,7 +316,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (typeof msg === 'string') {
         if (code === 'auth/unauthorized-domain' || msg.includes('auth/unauthorized-domain')) {
-          return { success: false, message: 'Unauthorized Firebase domain. Use http://localhost:8080 or add your domain in Firebase Auth → Settings → Authorized domains.' };
+          return { success: false, message: 'Unauthorized Firebase domain. In Firebase Console → Authentication → Settings, add this site’s domain under Authorized domains.' };
         }
         if (code === 'auth/operation-not-allowed' || msg.includes('auth/operation-not-allowed')) {
           return { success: false, message: 'Firebase Email/Password sign-in is disabled. Enable it in Firebase Console → Authentication.' };

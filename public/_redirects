@@ -1,0 +1,2 @@
+# Netlify / some static hosts: serve SPA for client-side routes (avoids 404 on refresh)
+/*    /index.html   200
