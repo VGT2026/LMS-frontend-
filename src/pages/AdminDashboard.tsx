@@ -42,24 +42,61 @@ const AdminDashboard = () => {
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [tickets, setTickets] = useState<SupportTicketRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [apiIssues, setApiIssues] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [statsRes, coursesRes, ticketsRes] = await Promise.all([
-          dashboardAPI.getAdminStats(),
+        setApiIssues([]);
+
+        const [statsOutcome, coursesOutcome, ticketsOutcome] = await Promise.allSettled([
+          dashboardAPI.getAdminStatsStrict(),
           courseAPI.getAllCourses({ limit: 8 }),
-          supportAPI.listTickets({ limit: 6 }),
+          supportAPI.listTicketsForAdmin({ limit: 6 }),
         ]);
-        setStats(statsRes as any);
-        const list = coursesRes?.data ?? [];
-        setCourses(Array.isArray(list) ? list : []);
-        setTickets(Array.isArray(ticketsRes) ? ticketsRes : []);
+
+        const warnings: string[] = [];
+
+        if (statsOutcome.status === "fulfilled") {
+          const { stats: s, error } = statsOutcome.value;
+          if (error) {
+            warnings.push(`Statistics: ${error}`);
+            setStats(null);
+          } else {
+            setStats(s);
+          }
+        } else {
+          setStats(null);
+          warnings.push("Statistics could not be loaded.");
+        }
+
+        if (coursesOutcome.status === "fulfilled") {
+          const coursesRes = coursesOutcome.value;
+          const list = coursesRes?.data ?? [];
+          setCourses(Array.isArray(list) ? list : []);
+        } else {
+          setCourses([]);
+          const msg = coursesOutcome.reason instanceof Error ? coursesOutcome.reason.message : "Courses could not be loaded.";
+          warnings.push(`Courses: ${msg}`);
+        }
+
+        if (ticketsOutcome.status === "fulfilled") {
+          const rows = ticketsOutcome.value;
+          setTickets(Array.isArray(rows) ? rows : []);
+        } else {
+          setTickets([]);
+          const msg =
+            ticketsOutcome.reason instanceof Error ? ticketsOutcome.reason.message : "Support tickets could not be loaded.";
+          warnings.push(`Support: ${msg}`);
+        }
+
+        setApiIssues(warnings);
       } catch {
         setStats(null);
         setCourses([]);
         setTickets([]);
+        setApiIssues(["Admin dashboard requests failed unexpectedly."]);
       } finally {
         setLoading(false);
       }
@@ -74,13 +111,31 @@ const AdminDashboard = () => {
         <p className="text-muted-foreground mt-1">Platform overview and management</p>
       </motion.div>
 
+      {apiIssues.length > 0 && (
+        <motion.div
+          variants={fadeUp}
+          className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-foreground space-y-1"
+          role="alert"
+        >
+          <p className="font-medium">Some data could not be loaded from the API (HTTP 5xx indicates a backend problem).</p>
+          <ul className="list-disc list-inside text-muted-foreground space-y-0.5">
+            {apiIssues.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+          <p className="text-xs text-muted-foreground pt-1">
+            Open your API host logs (Railway deployment for <span className="font-mono">lms-production-7308</span>) for the failing route and stack trace—not the frontend build.
+          </p>
+        </motion.div>
+      )}
+
       {/* Stats */}
       <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Users", value: loading ? "—" : (stats?.totalUsers ?? 0).toLocaleString(), icon: Users, color: "text-primary bg-primary/10" },
-          { label: "Active Users", value: loading ? "—" : (stats?.activeUsers ?? 0).toLocaleString(), icon: Users, color: "text-accent bg-accent/10" },
-          { label: "Total Courses", value: loading ? "—" : (stats?.totalCourses ?? 0), icon: BookOpen, color: "text-success bg-success/10" },
-          { label: "Published Courses", value: loading ? "—" : (stats?.activeCourses ?? 0), icon: TrendingUp, color: "text-warning bg-warning/10" },
+          { label: "Total Users", value: loading ? "—" : stats == null ? "—" : stats.totalUsers.toLocaleString(), icon: Users, color: "text-primary bg-primary/10" },
+          { label: "Active Users", value: loading ? "—" : stats == null ? "—" : stats.activeUsers.toLocaleString(), icon: Users, color: "text-accent bg-accent/10" },
+          { label: "Total Courses", value: loading ? "—" : stats == null ? "—" : String(stats.totalCourses), icon: BookOpen, color: "text-success bg-success/10" },
+          { label: "Published Courses", value: loading ? "—" : stats == null ? "—" : String(stats.activeCourses), icon: TrendingUp, color: "text-warning bg-warning/10" },
         ].map((stat) => (
           <div key={stat.label} className="bg-card rounded-xl p-5 border border-border shadow-card">
             <div className="flex items-center justify-between">

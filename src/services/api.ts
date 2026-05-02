@@ -68,7 +68,11 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      const baseMsg = errorData.message || `HTTP ${response.status}`;
+      const baseMsg =
+        (typeof errorData.message === "string" && errorData.message) ||
+        (response.status >= 500
+          ? `Server error (${response.status}). Check API logs (e.g. Railway).`
+          : `HTTP ${response.status}`);
       const message =
         errorData.path && typeof errorData.path === "string"
           ? `${baseMsg} — ${errorData.path}`
@@ -557,6 +561,29 @@ export const dashboardAPI = {
       return { totalUsers: 0, activeCourses: 0, totalCourses: 0, activeUsers: 0 };
     }
   },
+
+  /** Admin dashboard: distinct success vs failure (avoids showing zeros when API returns 5xx). */
+  getAdminStatsStrict: async (): Promise<{
+    stats: { totalUsers: number; activeUsers: number; totalCourses: number; activeCourses: number };
+    error: string | null;
+  }> => {
+    try {
+      const res = await apiRequest("/dashboard/admin");
+      const data = res?.data ?? res;
+      return {
+        stats: {
+          totalUsers: data?.totalUsers ?? 0,
+          activeUsers: data?.activeUsers ?? 0,
+          totalCourses: data?.totalCourses ?? 0,
+          activeCourses: data?.activeCourses ?? 0,
+        },
+        error: null,
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to load admin statistics";
+      return { stats: { totalUsers: 0, activeUsers: 0, totalCourses: 0, activeCourses: 0 }, error: msg };
+    }
+  },
 };
 
 // Support tickets / issues (authenticated users submit; admins can list)
@@ -589,6 +616,21 @@ export const supportAPI = {
       const data = res?.data ?? res;
       return data?.tickets ?? [];
     });
+  },
+
+  /** Admin list: tries GET /support/tickets, then GET /support/issues if the first route errors (backend variance). */
+  listTicketsForAdmin: async (params?: { limit?: number }) => {
+    const limit = params?.limit ?? 10;
+    const q = `?limit=${encodeURIComponent(String(limit))}`;
+    try {
+      const res = await apiRequest(`/support/tickets${q}`);
+      const data = res?.data ?? res;
+      return Array.isArray(data?.tickets) ? data.tickets : [];
+    } catch {
+      const res = await apiRequest(`/support/issues${q}`);
+      const data = res?.data ?? res;
+      return Array.isArray(data?.tickets) ? data.tickets : [];
+    }
   },
 };
 
