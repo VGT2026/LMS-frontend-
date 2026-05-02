@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Bot, Send, User, Sparkles, BookOpen, Lightbulb, MessageCircle, Loader2, X, GraduationCap, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { dashboardAPI } from "@/services/api";
+import { aiAPI, dashboardAPI } from "@/services/api";
 import { courses as mockCourses } from "@/data/mockData";
 
 interface ChatMessage {
@@ -892,51 +892,26 @@ const AITutor = () => {
         setIsTyping(true);
 
         try {
-            // Get auth token
-            const token = localStorage.getItem("lms_token") || sessionStorage.getItem("lms_token");
-            console.log('[AITutor] Request starting...');
-            console.log('[AITutor] Token available:', !!token);
-            console.log('[AITutor] Question:', userMsg.content);
-            console.log('[AITutor] Course:', selectedCourse.title);
-            
-            // Call OpenAI API endpoint
-            const response = await fetch("/api/ai/ask", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    ...(token && { Authorization: `Bearer ${token}` }),
-                },
-                body: JSON.stringify({
-                    question: userMsg.content,
-                    context: selectedCourse.description,
-                    courseId: selectedCourse.id,
-                    courseTitle: selectedCourse.title,
-                }),
-            });
-
-            console.log('[AITutor] Response status:', response.status);
-            
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                console.log('[AITutor] Error response:', errorData);
-                throw new Error(errorData.message || `HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
-            console.log('[AITutor] Success! Response:', data);
-            
-            const aiResponse = data?.data?.answer || "No response received from AI";
-            console.log('[AITutor] AI Response length:', aiResponse.length);
+            const result = await aiAPI.askTutor(
+                userMsg.content,
+                selectedCourse.description,
+                Number(selectedCourse.id)
+            );
+            const aiResponse =
+                result?.answer ||
+                result?.data?.answer ||
+                result?.message ||
+                "No response received from AI";
 
             const aiMsg: ChatMessage = {
                 id: `ai${Date.now()}`,
                 role: "ai",
-                content: aiResponse,
+                content: String(aiResponse),
                 timestamp: new Date(),
             };
             setMessages((prev) => [...prev, aiMsg]);
         } catch (error) {
-            console.error("[AITutor] Error:", error);
+            console.error("AI Tutor request failed:", error);
             const errorMsg: ChatMessage = {
                 id: `ai${Date.now()}`,
                 role: "ai",

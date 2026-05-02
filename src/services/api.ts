@@ -893,14 +893,31 @@ export const aiAPI = {
    * @param context Optional context about the lesson/topic
    * @param courseId Optional course ID for context
    */
-  askTutor: (question: string, context?: string, courseId?: number) =>
-    apiRequest('/ai/ask', {
-      method: 'POST',
-      body: JSON.stringify({ question, context, courseId }),
-    }).then((res) => {
-      const data = res?.data ?? res;
-      return data;
-    }),
+  askTutor: async (question: string, context?: string, courseId?: number) => {
+    const body = JSON.stringify({ question, context, courseId });
+    const endpoints = ['/ai/ask', '/ai/tutor', '/ai/chat'];
+    let firstError: unknown = null;
+
+    for (const endpoint of endpoints) {
+      try {
+        const res = await apiRequest(endpoint, {
+          method: 'POST',
+          body,
+        });
+        const data = res?.data ?? res;
+        return data;
+      } catch (e) {
+        if (!firstError) firstError = e;
+        const status = readHttpStatus(e);
+        // If the route exists but rejects POST (405) or is missing (404), try the next known route.
+        if (status === 404 || status === 405) {
+          continue;
+        }
+        throw e;
+      }
+    }
+    throw (firstError instanceof Error ? firstError : new Error('AI Tutor request failed'));
+  },
 
   /**
    * Check if AI service is available and configured
