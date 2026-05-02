@@ -931,20 +931,59 @@ export const aiAPI = {
   /**
    * Get all summaries for the user
    */
-  getSummaries: (limit: number = 20, offset: number = 0) =>
-    apiRequest(`/ai/summaries?limit=${limit}&offset=${offset}`).then((res) => {
-      console.log("[API] getSummaries raw response:", res);
-      const data = res?.data ?? res;
-      const rawPagination = res?.pagination || { limit, offset, total: 0 };
-      const summaries = Array.isArray(data) ? data : data?.data ?? [];
-      const hasMore = (rawPagination.offset + rawPagination.limit) < rawPagination.total;
-      const pagination = { ...rawPagination, hasMore };
-      console.log("[API] getSummaries processed - summaries:", summaries?.length, "pagination:", pagination);
-      return { summaries, pagination };
-    }).catch((err) => {
-      console.error("[API] getSummaries error:", err);
-      throw err;
-    }),
+  getSummaries: async (limit: number = 20, offset: number = 0) => {
+    const endpoints = [
+      `/ai/summaries?limit=${limit}&offset=${offset}`,
+      `/ai/summaries?limit=${limit}&page=${Math.floor(offset / Math.max(limit, 1)) + 1}`,
+      `/ai/summary?limit=${limit}&offset=${offset}`,
+      `/ai/summaries/me?limit=${limit}&offset=${offset}`,
+    ];
+
+    const parseResponse = (res: any) => {
+      const root = res?.data ?? res ?? {};
+      const list =
+        (Array.isArray(root) && root) ||
+        (Array.isArray(root?.data) && root.data) ||
+        (Array.isArray(root?.summaries) && root.summaries) ||
+        (Array.isArray(root?.items) && root.items) ||
+        (Array.isArray(res?.summaries) && res.summaries) ||
+        [];
+
+      const paginationCandidate = root?.pagination ?? res?.pagination ?? {};
+      const total = Number(
+        paginationCandidate?.total ??
+        root?.total ??
+        res?.total ??
+        list.length ??
+        0
+      );
+      const normalizedPagination = {
+        limit: Number(paginationCandidate?.limit ?? limit),
+        offset: Number(paginationCandidate?.offset ?? offset),
+        total: Number.isFinite(total) ? total : list.length,
+      };
+      const hasMore = (normalizedPagination.offset + normalizedPagination.limit) < normalizedPagination.total;
+      return { summaries: list, pagination: { ...normalizedPagination, hasMore } };
+    };
+
+    let firstError: unknown = null;
+    for (const endpoint of endpoints) {
+      try {
+        const res = await apiRequest(endpoint);
+        return parseResponse(res);
+      } catch (err) {
+        if (!firstError) firstError = err;
+        const status = readHttpStatus(err);
+        // Try fallback endpoints for route/method mismatches.
+        if (status === 404 || status === 405) continue;
+        // For 5xx, still try one alternate endpoint in case backend route differs.
+        if (status && status >= 500) continue;
+        throw err;
+      }
+    }
+
+    throw (firstError instanceof Error ? firstError : new Error("Failed to fetch summaries"));
+  },
 
   /**
    * Get a specific summary by ID
