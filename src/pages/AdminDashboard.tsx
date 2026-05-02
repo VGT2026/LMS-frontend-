@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Users, BookOpen, DollarSign, TrendingUp, ChevronRight, FileText } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { courseAPI, dashboardAPI, supportAPI } from "@/services/api";
 
@@ -43,66 +43,68 @@ const AdminDashboard = () => {
   const [tickets, setTickets] = useState<SupportTicketRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [apiIssues, setApiIssues] = useState<string[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const loadDashboard = useCallback(async () => {
+    try {
+      setLoading(true);
+      setApiIssues([]);
+
+      const [statsOutcome, coursesOutcome, ticketsOutcome] = await Promise.allSettled([
+        dashboardAPI.getAdminStatsStrict(),
+        courseAPI.getAdminPreviewCourses(8),
+        supportAPI.listTicketsForAdmin({ limit: 6 }),
+      ]);
+
+      const warnings: string[] = [];
+
+      if (statsOutcome.status === "fulfilled") {
+        const { stats: s, error } = statsOutcome.value;
+        if (error) {
+          warnings.push(`Statistics (${`GET …/dashboard/admin`}): ${error}`);
+          setStats(null);
+        } else {
+          setStats(s);
+        }
+      } else {
+        setStats(null);
+        warnings.push(`Statistics (${`GET …/dashboard/admin`}): could not be loaded.`);
+      }
+
+      if (coursesOutcome.status === "fulfilled") {
+        const coursesRes = coursesOutcome.value;
+        const list = coursesRes?.data ?? [];
+        setCourses(Array.isArray(list) ? list : []);
+      } else {
+        setCourses([]);
+        const msg = coursesOutcome.reason instanceof Error ? coursesOutcome.reason.message : "could not be loaded.";
+        warnings.push(`Courses (${`GET …/courses`} — admin preview): ${msg}`);
+      }
+
+      if (ticketsOutcome.status === "fulfilled") {
+        const rows = ticketsOutcome.value;
+        setTickets(Array.isArray(rows) ? rows : []);
+      } else {
+        setTickets([]);
+        const msg =
+          ticketsOutcome.reason instanceof Error ? ticketsOutcome.reason.message : "could not be loaded.";
+        warnings.push(`Support (${`GET …/support/tickets`}): ${msg}`);
+      }
+
+      setApiIssues(warnings);
+    } catch {
+      setStats(null);
+      setCourses([]);
+      setTickets([]);
+      setApiIssues(["Admin dashboard requests failed unexpectedly."]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setApiIssues([]);
-
-        const [statsOutcome, coursesOutcome, ticketsOutcome] = await Promise.allSettled([
-          dashboardAPI.getAdminStatsStrict(),
-          courseAPI.getAllCourses({ limit: 8 }),
-          supportAPI.listTicketsForAdmin({ limit: 6 }),
-        ]);
-
-        const warnings: string[] = [];
-
-        if (statsOutcome.status === "fulfilled") {
-          const { stats: s, error } = statsOutcome.value;
-          if (error) {
-            warnings.push(`Statistics: ${error}`);
-            setStats(null);
-          } else {
-            setStats(s);
-          }
-        } else {
-          setStats(null);
-          warnings.push("Statistics could not be loaded.");
-        }
-
-        if (coursesOutcome.status === "fulfilled") {
-          const coursesRes = coursesOutcome.value;
-          const list = coursesRes?.data ?? [];
-          setCourses(Array.isArray(list) ? list : []);
-        } else {
-          setCourses([]);
-          const msg = coursesOutcome.reason instanceof Error ? coursesOutcome.reason.message : "Courses could not be loaded.";
-          warnings.push(`Courses: ${msg}`);
-        }
-
-        if (ticketsOutcome.status === "fulfilled") {
-          const rows = ticketsOutcome.value;
-          setTickets(Array.isArray(rows) ? rows : []);
-        } else {
-          setTickets([]);
-          const msg =
-            ticketsOutcome.reason instanceof Error ? ticketsOutcome.reason.message : "Support tickets could not be loaded.";
-          warnings.push(`Support: ${msg}`);
-        }
-
-        setApiIssues(warnings);
-      } catch {
-        setStats(null);
-        setCourses([]);
-        setTickets([]);
-        setApiIssues(["Admin dashboard requests failed unexpectedly."]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+    loadDashboard();
+  }, [loadDashboard, reloadKey]);
 
   return (
     <motion.div initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08 } } }} className="space-y-6 max-w-7xl">
@@ -114,17 +116,28 @@ const AdminDashboard = () => {
       {apiIssues.length > 0 && (
         <motion.div
           variants={fadeUp}
-          className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-foreground space-y-1"
+          className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-foreground space-y-2"
           role="alert"
         >
-          <p className="font-medium">Some data could not be loaded from the API (HTTP 5xx indicates a backend problem).</p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <p className="font-medium pr-4">
+              Some data could not be loaded — <strong>HTTP 500</strong> responses come from your API server, not this page.
+              Fix handlers for the routes listed below on the backend deployment.
+            </p>
+            <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => setReloadKey((k) => k + 1)} disabled={loading}>
+              Retry
+            </Button>
+          </div>
           <ul className="list-disc list-inside text-muted-foreground space-y-0.5">
             {apiIssues.map((w, i) => (
               <li key={i}>{w}</li>
             ))}
           </ul>
-          <p className="text-xs text-muted-foreground pt-1">
-            Open your API host logs (Railway deployment for <span className="font-mono">lms-production-7308</span>) for the failing route and stack trace—not the frontend build.
+          <p className="text-xs text-muted-foreground">
+            Example (Railway): project → Logs → reproduce this page → find stack traces for{" "}
+            <code className="text-[11px] bg-muted px-1 rounded">/api/courses</code>,{" "}
+            <code className="text-[11px] bg-muted px-1 rounded">/api/support/tickets</code>, or{" "}
+            <code className="text-[11px] bg-muted px-1 rounded">/api/dashboard/admin</code>.
           </p>
         </motion.div>
       )}

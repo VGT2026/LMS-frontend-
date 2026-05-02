@@ -44,6 +44,22 @@ const getAuthToken = (): string | null => {
   }
 };
 
+/** Set on errors thrown by `apiRequest` when the HTTP status is known */
+function readHttpStatus(error: unknown): number | undefined {
+  if (typeof error === "object" && error !== null && "status" in error) {
+    const s = Number((error as { status?: unknown }).status);
+    return Number.isFinite(s) ? s : undefined;
+  }
+  return undefined;
+}
+
+function normalizeTicketsPayload(res: any): unknown[] {
+  const data = res?.data ?? res;
+  if (Array.isArray(data?.tickets)) return data.tickets;
+  if (Array.isArray(data)) return data;
+  return [];
+}
+
 // Generic API request function
 const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<any> => {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -190,6 +206,29 @@ export const courseAPI = {
     if (params?.include_inactive !== undefined) searchParams.append('include_inactive', params.include_inactive.toString());
 
     return apiRequest(`/courses?${searchParams.toString()}`);
+  },
+
+  /**
+   * Admin dashboard course table: retries alternate query shapes if the server errors on `limit` only.
+   * Does not replace fixing the backend — only helps when handlers differ between filters.
+   */
+  getAdminPreviewCourses: async (limit = 8) => {
+    try {
+      return await courseAPI.getAllCourses({ limit });
+    } catch (e1) {
+      const st = readHttpStatus(e1);
+      if (st !== 500) throw e1;
+      try {
+        return await courseAPI.getAllCourses({ limit, include_inactive: true });
+      } catch {
+        /* fall through */
+      }
+      try {
+        return await courseAPI.getAllCourses({ page: 1, limit });
+      } catch {
+        throw e1 instanceof Error ? e1 : new Error(String(e1));
+      }
+    }
   },
 
   getCourseById: (id: string) => apiRequest(`/courses/${id}`),
@@ -627,16 +666,25 @@ export const supportAPI = {
     let ticketsErr: unknown;
     try {
       const res = await apiRequest(`/support/tickets${q}`);
-      const data = res?.data ?? res;
-      return Array.isArray(data?.tickets) ? data.tickets : [];
+      return normalizeTicketsPayload(res).slice(0, limit);
     } catch (e) {
       ticketsErr = e;
-      const status = typeof e === "object" && e !== null && "status" in e ? Number((e as { status?: number }).status) : NaN;
+      const status = readHttpStatus(e);
+
+      // Some backends choke on query parsing for `limit`; try un-parameterized list once.
+      if (status !== undefined && status >= 500) {
+        try {
+          const res = await apiRequest("/support/tickets");
+          return normalizeTicketsPayload(res).slice(0, limit);
+        } catch {
+          /* surface original tickets error below */
+        }
+      }
+
       if (status === 404) {
         try {
           const res = await apiRequest(`/support/issues${q}`);
-          const data = res?.data ?? res;
-          return Array.isArray(data?.tickets) ? data.tickets : [];
+          return normalizeTicketsPayload(res).slice(0, limit);
         } catch {
           const orig = ticketsErr instanceof Error ? ticketsErr.message : "Unknown error";
           throw new Error(
