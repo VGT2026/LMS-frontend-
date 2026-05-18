@@ -11,7 +11,7 @@ import {
   Server,
 } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
-import { superAdminStats } from "@/data/superAdminMock";
+import { superAdminStats } from "@/data/superAdminData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -130,8 +130,8 @@ const SuperAdminDashboard = () => {
       </motion.div>
 
       <motion.div variants={fadeUp} className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-        Demo metrics from <code className="text-xs bg-muted px-1 rounded">superAdminMock.ts</code>. Connect{" "}
-        <code className="text-xs bg-muted px-1 rounded">GET /auth/superadmin/stats</code> when the API is ready.
+        Sample platform metrics until{" "}
+        <code className="text-xs bg-muted px-1 rounded">GET /auth/superadmin/stats</code> is connected on the API.
         {/* vercel.json already rewrites all routes (including /superadmin/*) to index.html for SPA */}
       </motion.div>
     </motion.div>

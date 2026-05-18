@@ -14,17 +14,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { authAPI, isSuperAdminApiFallbackError, normalizeUsersList, readHttpStatus } from "@/services/api";
-import {
-  appendMockPlatformAdmin,
-  loadMockPlatformAdmins,
-  toggleMockPlatformAdminStatus,
-  useMockSuperAdmin,
-  type PlatformAdminRecord,
-} from "@/data/superAdminMock";
+import { authAPI, formatApiErrorMessage, normalizeUsersList, readHttpStatus } from "@/services/api";
+import type { PlatformAdminRecord } from "@/data/superAdminData";
 import { Shield, UserPlus, Search, ArrowLeft } from "lucide-react";
 
 function formatCreatedAt(iso: string) {
@@ -46,21 +39,19 @@ function apiRowToRecord(user: Record<string, unknown>): PlatformAdminRecord {
     email: String(user.email ?? ""),
     status: user.is_active === false ? "inactive" : "active",
     createdAt: String(user.created_at ?? user.createdAt ?? new Date().toISOString()),
-    loginReady: true,
   };
 }
 
 const SuperAdminAdmins = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const mockMode = useMockSuperAdmin();
 
   const [admins, setAdmins] = useState<PlatformAdminRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [usingMockFallback, setUsingMockFallback] = useState(mockMode);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -70,35 +61,25 @@ const SuperAdminAdmins = () => {
 
   const loadAdmins = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      if (mockMode) {
-        setAdmins(loadMockPlatformAdmins());
-        setUsingMockFallback(true);
-        return;
-      }
-
-      try {
-        const res = await authAPI.listAdmins();
-        const rows = normalizeUsersList(res) as Record<string, unknown>[];
-        const mapped = rows
-          .filter((u) => u.role === "admin")
-          .map((u) => apiRowToRecord(u));
-        if (mapped.length > 0) {
-          setAdmins(mapped);
-          setUsingMockFallback(false);
-        } else {
-          setAdmins(loadMockPlatformAdmins());
-          setUsingMockFallback(true);
-        }
-      } catch (apiErr) {
-        console.warn("listAdmins failed, using mock storage:", apiErr);
-        setAdmins(loadMockPlatformAdmins());
-        setUsingMockFallback(true);
-      }
+      const res = await authAPI.listAdmins();
+      const rows = normalizeUsersList(res) as Record<string, unknown>[];
+      const mapped = rows
+        .filter((u) => u.role === "admin")
+        .map((u) => apiRowToRecord(u));
+      setAdmins(mapped);
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? formatApiErrorMessage(error.message, readHttpStatus(error))
+          : "Could not load platform admins.";
+      setLoadError(msg);
+      setAdmins([]);
     } finally {
       setLoading(false);
     }
-  }, [mockMode]);
+  }, []);
 
   useEffect(() => {
     void loadAdmins();
@@ -150,17 +131,15 @@ const SuperAdminAdmins = () => {
         email: provisioned.user.email,
         status: "active",
         createdAt: new Date().toISOString(),
-        loginReady: true,
       };
 
       setAdmins((prev) => [record, ...prev]);
-      setUsingMockFallback(false);
       setFormData({ name: "", email: "", password: "", confirmPassword: "" });
       setCreateDialogOpen(false);
 
       toast({
-        title: "Admin can log in",
-        description: `${record.name} was created on the server. They sign in at /login with the email and password you set, then open /admin.`,
+        title: "Admin created",
+        description: `${record.name} can sign in at /login with the email and password you set, then open /admin.`,
       });
 
       if (provisioned.roleWarning) {
@@ -170,96 +149,71 @@ const SuperAdminAdmins = () => {
           variant: "destructive",
         });
       }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Failed to create admin";
-      const status = readHttpStatus(error);
 
-      if (isSuperAdminApiFallbackError(error) || status === 403) {
-        const record = appendMockPlatformAdmin({
-          name: formData.name.trim(),
-          email: formData.email.toLowerCase(),
-        });
-        setAdmins((prev) => [record, ...prev]);
-        setUsingMockFallback(true);
-        setFormData({ name: "", email: "", password: "", confirmPassword: "" });
-        setCreateDialogOpen(false);
-        toast({
-          title: "Demo list only — cannot log in",
-          description:
-            "Sign in as superadmin first, then create again. Demo-only rows are not real accounts. Log out and log in as superadmin@lmspro.com (or fix API permissions).",
-          variant: "destructive",
-        });
-      } else {
-        toast({ title: "Error", description: msg, variant: "destructive" });
-      }
+      void loadAdmins();
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? formatApiErrorMessage(error.message, readHttpStatus(error))
+          : "Failed to create admin.";
+      toast({ title: "Could not create admin", description: msg, variant: "destructive" });
     } finally {
       setIsCreating(false);
     }
   };
 
   const handleToggleStatus = async (id: string) => {
-    if (mockMode || usingMockFallback) {
-      const updated = toggleMockPlatformAdminStatus(id);
-      setAdmins(updated);
-      toast({ title: "Status updated", description: "Mock admin status changed." });
-      return;
-    }
-
     try {
       const response = await authAPI.toggleUserStatus(parseInt(id, 10));
       if (response?.success) {
         const u = response.data;
         setAdmins((prev) =>
           prev.map((a) =>
-            a.id === id
-              ? { ...a, status: u.is_active ? "active" : "inactive" }
-              : a
+            a.id === id ? { ...a, status: u.is_active ? "active" : "inactive" } : a
           )
         );
         toast({ title: "Success", description: "Admin status updated." });
       } else {
         throw new Error(response?.message || "Update failed");
       }
-    } catch {
-      const updated = toggleMockPlatformAdminStatus(id);
-      setAdmins(updated);
-      setUsingMockFallback(true);
-      toast({
-        title: "Saved locally",
-        description: "API unavailable — status updated in demo storage.",
-      });
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? formatApiErrorMessage(error.message, readHttpStatus(error))
+          : "Could not update admin status.";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     }
   };
 
   if (loading) {
     return (
       <motion.div className="max-w-6xl mx-auto flex items-center justify-center min-h-[400px]">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <motion.div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </motion.div>
     );
   }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Button asChild variant="ghost" size="sm" className="mb-2 -ml-2 gap-1 text-muted-foreground">
-            <Link to="/superadmin">
-              <ArrowLeft className="h-4 w-4" />
-              Platform dashboard
-            </Link>
-          </Button>
-          <h1 className="text-2xl font-bold text-foreground">Platform Admins</h1>
-          <p className="text-muted-foreground mt-1">
-            Create and manage LMS admin accounts ({admins.length} total)
-          </p>
-        </div>
-        {usingMockFallback && (
-          <Badge variant="outline" className="text-xs">
-            Demo / mock data
-          </Badge>
-        )}
-      </div>
+      <motion.div>
+        <Button asChild variant="ghost" size="sm" className="mb-2 -ml-2 gap-1 text-muted-foreground">
+          <Link to="/superadmin">
+            <ArrowLeft className="h-4 w-4" />
+            Platform dashboard
+          </Link>
+        </Button>
+        <h1 className="text-2xl font-bold text-foreground">Platform Admins</h1>
+        <p className="text-muted-foreground mt-1">
+          Create and manage LMS admin accounts ({admins.length} total)
+        </p>
+      </motion.div>
+
+      {loadError && (
+        <Alert variant="destructive">
+          <AlertTitle>Could not load admins</AlertTitle>
+          <AlertDescription className="text-sm">{loadError}</AlertDescription>
+        </Alert>
+      )}
 
       <motion.div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -283,13 +237,13 @@ const SuperAdminAdmins = () => {
             <DialogHeader>
               <DialogTitle>Create platform admin</DialogTitle>
               <DialogDescription>
-                Creates a real account on the LMS server. The new admin signs in at /login with this email and password, then uses /admin.
+                Creates an account on the LMS server. The new admin signs in at /login, then uses /admin.
               </DialogDescription>
             </DialogHeader>
             <Alert className="mx-6 mb-0">
-              <AlertTitle>You must be signed in as Super Admin</AlertTitle>
+              <AlertTitle>Super Admin session required</AlertTitle>
               <AlertDescription className="text-xs">
-                Creating an admin here calls the API (not browser demo storage). If you only see “demo” toasts, log in as your superadmin user first, then create again.
+                You must be logged in as superadmin. If creation fails with forbidden or unauthorized, log out and sign in again as your superadmin account.
               </AlertDescription>
             </Alert>
             <div className="grid gap-4 py-4 px-6">
@@ -353,15 +307,14 @@ const SuperAdminAdmins = () => {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Admin</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Created</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Status</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Login</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Active</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted-foreground">
-                    No platform admins yet. Create one to get started.
+                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                    {loadError ? "Fix the error above and refresh the page." : "No platform admins yet. Create one to get started."}
                   </td>
                 </tr>
               ) : (
@@ -369,9 +322,9 @@ const SuperAdminAdmins = () => {
                   <tr key={a.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <motion.div className="w-9 h-9 rounded-full bg-gradient-primary flex items-center justify-center text-primary-foreground text-sm font-semibold">
+                        <div className="w-9 h-9 rounded-full bg-gradient-primary flex items-center justify-center text-primary-foreground text-sm font-semibold">
                           {a.name.charAt(0)}
-                        </motion.div>
+                        </div>
                         <div>
                           <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
                             {a.name}
@@ -390,17 +343,6 @@ const SuperAdminAdmins = () => {
                       >
                         {a.status}
                       </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      {a.loginReady !== false ? (
-                        <Badge variant="secondary" className="text-xs font-normal">
-                          Can sign in
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
-                          Demo only
-                        </Badge>
-                      )}
                     </td>
                     <td className="px-5 py-3">
                       <Switch

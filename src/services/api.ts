@@ -67,7 +67,7 @@ export function formatApiErrorMessage(message: string | undefined, status?: numb
   return raw || "Something went wrong. Please try again.";
 }
 
-/** True when the API is down, missing routes, or forbidden — safe to use Super Admin mock storage. */
+/** True when superadmin createAdmin failed with server/forbidden/missing-route errors (register fallback may apply). */
 export function isSuperAdminApiFallbackError(error: unknown): boolean {
   const status = readHttpStatus(error);
   if (status !== undefined && (status >= 500 || status === 404 || status === 405 || status === 403)) {
