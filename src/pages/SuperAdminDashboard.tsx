@@ -37,12 +37,20 @@ const SuperAdminDashboard = () => {
           <h1 className="text-2xl font-bold text-foreground">Platform Control Center</h1>
           <p className="text-muted-foreground mt-1">Cross-tenant overview and platform administration</p>
         </div>
-        <Button asChild variant="outline" className="gap-1">
-          <Link to="/superadmin/admins">
-            Manage platform admins
-            <ChevronRight className="h-4 w-4" />
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" className="gap-1">
+            <Link to="/superadmin/users">
+              Students &amp; instructors
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="gap-1">
+            <Link to="/superadmin/admins">
+              Platform admins
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
       </motion.div>
 
       <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

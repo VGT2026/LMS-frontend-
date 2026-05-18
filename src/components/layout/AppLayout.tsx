@@ -133,6 +133,7 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
 
     if (user.role === "superadmin") {
       return [
+        { text: "View students and instructors", href: "/superadmin/users" },
         { text: "Create a new platform admin", href: "/superadmin/admins" },
         { text: "Open LMS admin panel", href: "/admin" },
         { text: "Review platform metrics", href: "/superadmin" },
