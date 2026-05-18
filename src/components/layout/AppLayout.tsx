@@ -4,7 +4,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard, BookOpen, Calendar, MessageSquare, Award, BarChart3,
   Settings, HelpCircle, GraduationCap, Bell, Search, ChevronDown, ChevronRight,
-  LogOut, User, Users, PlusCircle, FileText, Menu, X, Bot, Wand2, Sparkles, Map
+  LogOut, User, Users, PlusCircle, FileText, Menu, X, Bot, Wand2, Sparkles, Map,
+  Shield,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -83,6 +84,13 @@ const adminNav: NavItem[] = [
   { label: "Settings", icon: <Settings className="w-5 h-5" />, path: "/settings" },
 ];
 
+const superadminNav: NavItem[] = [
+  { label: "Platform Dashboard", icon: <LayoutDashboard className="w-5 h-5" />, path: "/superadmin" },
+  { label: "Platform Admins", icon: <Shield className="w-5 h-5" />, path: "/superadmin/admins" },
+  { label: "LMS Admin Panel", icon: <Users className="w-5 h-5" />, path: "/admin" },
+  { label: "Settings", icon: <Settings className="w-5 h-5" />, path: "/settings" },
+];
+
 const instructorNav: NavItem[] = [
   { label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" />, path: "/instructor" },
   { label: "My Courses", icon: <BookOpen className="w-5 h-5" />, path: "/instructor/courses" },
@@ -109,11 +117,26 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [coursesDropdownOpen, setCoursesDropdownOpen] = useState(false);
 
-  const navItems = user?.role === "admin" ? adminNav : user?.role === "instructor" ? instructorNav : studentNav;
+  const navItems =
+    user?.role === "superadmin"
+      ? superadminNav
+      : user?.role === "admin"
+        ? adminNav
+        : user?.role === "instructor"
+          ? instructorNav
+          : studentNav;
   const isStudent = user?.role === "student";
 
   const notificationItems = useMemo(() => {
     if (!user) return [];
+
+    if (user.role === "superadmin") {
+      return [
+        { text: "Create a new platform admin", href: "/superadmin/admins" },
+        { text: "Open LMS admin panel", href: "/admin" },
+        { text: "Review platform metrics", href: "/superadmin" },
+      ];
+    }
 
     if (user.role === "admin") {
       return [

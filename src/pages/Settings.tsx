@@ -39,7 +39,7 @@ const roleMeta: Record<
 };
 
 function getNotifLabels(role: UserRole | undefined): { key: NotifKey; label: string }[] {
-  if (role === "admin") {
+  if (role === "admin" || role === "superadmin") {
     return [
       { key: "email", label: "Email notifications" },
       { key: "push", label: "Push notifications" },
@@ -221,7 +221,7 @@ const Settings = () => {
       </div>
 
       {/* Quick links — admin & instructor */}
-      {role === "admin" && (
+      {(role === "admin" || role === "superadmin") && (
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link to="/admin" className="gap-1.5">
@@ -295,7 +295,7 @@ const Settings = () => {
       <div className="bg-card rounded-xl p-6 border border-border shadow-card space-y-4">
         <h2 className="font-semibold text-foreground">Change password</h2>
         <p className="text-sm text-muted-foreground">
-          {role === "admin" || role === "instructor"
+          {role === "admin" || role === "superadmin" || role === "instructor"
             ? "Use your current LMS password. If you sign in only with Google or another provider, use Forgot password on the login page."
             : "Use your current password to set a new one."}
         </p>

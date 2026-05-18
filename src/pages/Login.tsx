@@ -33,8 +33,15 @@ const Login = () => {
       const result = await login(email, password, rememberMe);
       if (result.success && result.user) {
         // Navigate based on actual user role from database
-        navigate(result.user.role === "admin" ? "/admin" :
-                result.user.role === "instructor" ? "/instructor" : "/dashboard");
+        navigate(
+          result.user.role === "superadmin"
+            ? "/superadmin"
+            : result.user.role === "admin"
+              ? "/admin"
+              : result.user.role === "instructor"
+                ? "/instructor"
+                : "/dashboard"
+        );
       } else {
         setError(result.message || "Invalid credentials");
       }

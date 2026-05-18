@@ -12,7 +12,7 @@ import {
 } from "firebase/auth";
 import { authAPI, API_BASE_URL } from "@/services/api";
 
-export type UserRole = "student" | "instructor" | "admin";
+export type UserRole = "student" | "instructor" | "admin" | "superadmin";
 
 export interface User {
   id: string;
@@ -70,11 +70,28 @@ const parseIds = (v: unknown): string[] => {
   return [];
 };
 
+const VALID_ROLES: UserRole[] = ["student", "instructor", "admin", "superadmin"];
+
+function resolveUserRole(u: { role?: string; email?: string }): UserRole {
+  const raw = String(u.role ?? "").toLowerCase();
+  if (raw === "superadmin") return "superadmin";
+
+  const email = String(u.email ?? "").toLowerCase();
+  const envEmails = (import.meta.env.VITE_SUPERADMIN_EMAILS ?? "")
+    .split(",")
+    .map((e: string) => e.trim().toLowerCase())
+    .filter(Boolean);
+  if (email && envEmails.includes(email)) return "superadmin";
+
+  if (VALID_ROLES.includes(raw as UserRole)) return raw as UserRole;
+  return "student";
+}
+
 const toUser = (u: any): User => ({
   id: String(u.id),
   name: u.name,
   email: u.email,
-  role: u.role,
+  role: resolveUserRole(u),
   avatar: u.avatar,
   preferredCategories: Array.isArray(u.preferred_categories) ? u.preferred_categories : parseIds(u.preferred_categories),
   completedCourseIds: parseIds(u.completed_course_ids),

@@ -53,7 +53,7 @@ const SupportPage = () => {
     useEffect(() => {
         let cancelled = false;
         const loadTickets = async () => {
-            if (role !== "admin") return;
+            if (role !== "admin" && role !== "superadmin") return;
             setTicketsLoading(true);
             try {
                 const res = await supportAPI.listTickets({ limit: 10 });
@@ -123,7 +123,7 @@ const SupportPage = () => {
         }
     };
 
-    if (role === "admin") {
+    if (role === "admin" || role === "superadmin") {
         return (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-5xl mx-auto space-y-6">
                 <div className="text-center">
@@ -344,12 +344,12 @@ const SupportPage = () => {
                 <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                     <FileText className="w-5 h-5 text-primary" /> Submit a Support Ticket
                 </h2>
-                {role === "admin" ? (
+                {role === "admin" || role === "superadmin" ? (
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">
                       Admin cannot submit support tickets. View submitted tickets from the Admin Dashboard.
                     </p>
-                    {role === "admin" && (
+                    {(role === "admin" || role === "superadmin") && (
                       <Button asChild variant="outline">
                         <Link to="/admin">Go to Admin Dashboard</Link>
                       </Button>

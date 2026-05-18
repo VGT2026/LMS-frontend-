@@ -98,8 +98,16 @@ const Register = () => {
       if (result.success) {
         setSuccess(true);
         setTimeout(() => {
-          navigate(result.user?.role === "admin" ? "/admin" :
-                  result.user?.role === "instructor" ? "/instructor" : "/dashboard", { replace: true });
+          navigate(
+            result.user?.role === "superadmin"
+              ? "/superadmin"
+              : result.user?.role === "admin"
+                ? "/admin"
+                : result.user?.role === "instructor"
+                  ? "/instructor"
+                  : "/dashboard",
+            { replace: true }
+          );
         }, 1500);
       } else {
         setError(result.message || "Registration failed");

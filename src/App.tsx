@@ -22,6 +22,8 @@ import AdminCourses from "./pages/AdminCourses";
 import AdminUsers from "./pages/AdminUsers";
 import AdminCreateCourse from "./pages/AdminCreateCourse";
 import AdminReports from "./pages/AdminReports";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
+import SuperAdminAdmins from "./pages/SuperAdminAdmins";
 import InstructorDashboard from "./pages/InstructorDashboard";
 import InstructorCourses from "./pages/InstructorCourses";
 import InstructorCourseDetail from "./pages/InstructorCourseDetail";
@@ -49,7 +51,18 @@ const queryClient = new QueryClient();
 const AdminRoute = ({ children }: { children: ReactNode }) => {
   const { isAuthenticated, user } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (user?.role !== "admin") return <Navigate to="/dashboard" replace />;
+  if (user?.role !== "admin" && user?.role !== "superadmin") return <Navigate to="/dashboard" replace />;
+  return (
+    <AppLayout>
+      <ErrorBoundary>{children}</ErrorBoundary>
+    </AppLayout>
+  );
+};
+
+const SuperAdminRoute = ({ children }: { children: ReactNode }) => {
+  const { isAuthenticated, user } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.role !== "superadmin") return <Navigate to="/dashboard" replace />;
   return (
     <AppLayout>
       <ErrorBoundary>{children}</ErrorBoundary>
@@ -73,6 +86,7 @@ const AppRoutes = () => {
 
   const getDefaultRedirect = () => {
     if (!isAuthenticated || !user) return "/login";
+    if (user.role === "superadmin") return "/superadmin";
     if (user.role === "admin") return "/admin";
     if (user.role === "instructor") return "/instructor";
     return "/dashboard";
@@ -108,6 +122,8 @@ const AppRoutes = () => {
       <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
       <Route path="/admin/create-course" element={<AdminRoute><AdminCreateCourse /></AdminRoute>} />
       <Route path="/admin/reports" element={<AdminRoute><AdminReports /></AdminRoute>} />
+      <Route path="/superadmin" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
+      <Route path="/superadmin/admins" element={<SuperAdminRoute><SuperAdminAdmins /></SuperAdminRoute>} />
       <Route path="/instructor" element={<ProtectedRoute><InstructorDashboard /></ProtectedRoute>} />
       <Route path="/instructor/courses" element={<ProtectedRoute><InstructorCourses /></ProtectedRoute>} />
       <Route path="/instructor/create-course" element={<ProtectedRoute><InstructorCreateCourse /></ProtectedRoute>} />

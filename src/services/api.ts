@@ -234,6 +234,23 @@ export const authAPI = {
       body: JSON.stringify({ name, email, password }),
     }),
 
+  /** Superadmin: create a platform LMS admin account */
+  createAdmin: (name: string, email: string, password: string) =>
+    apiRequest('/auth/superadmin/admin', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password }),
+    }),
+
+  /** Superadmin: list platform admin users */
+  listAdmins: (params?: { page?: number; limit?: number; search?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.search) searchParams.append('search', params.search);
+    const qs = searchParams.toString();
+    return apiRequest(`/auth/superadmin/admins${qs ? `?${qs}` : ''}`);
+  },
+
   getAllUsers: (params?: { page?: number; limit?: number; role?: string; search?: string }) => {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.append('page', params.page.toString());
