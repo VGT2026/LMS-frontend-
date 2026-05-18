@@ -10,7 +10,7 @@ import {
   EmailAuthProvider,
   type User as FirebaseUser,
 } from "firebase/auth";
-import { authAPI, API_BASE_URL } from "@/services/api";
+import { authAPI, API_BASE_URL, formatApiErrorMessage } from "@/services/api";
 
 export type UserRole = "student" | "instructor" | "admin" | "superadmin";
 
@@ -164,7 +164,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(null);
         return null;
       } catch (err: any) {
-        lastFirebaseSyncErrorRef.current = err?.message || 'Login failed';
+        lastFirebaseSyncErrorRef.current = formatApiErrorMessage(err?.message, err?.status);
         setUser(null);
         return null;
       } finally {
@@ -309,17 +309,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { success: false, message: lastFirebaseSyncErrorRef.current || "Login failed" };
       }
 
-      if (response.status >= 500) {
+      if (!data.success) {
         return {
           success: false,
-          message:
-            data.message === "Internal server error"
-              ? "The API returned an internal server error. Check Railway logs, or enable VITE_USE_MOCK_SUPERADMIN=true for Super Admin demo mode."
-              : data.message || `Server error (${response.status}). Try again later.`,
+          message: formatApiErrorMessage(
+            typeof data.message === "string" ? data.message : undefined,
+            response.status
+          ),
         };
       }
 
-      return { success: false, message: data.message || "Invalid credentials" };
+      return { success: false, message: formatApiErrorMessage("Invalid credentials", response.status) };
     } catch (error: any) {
       const code = error?.code || '';
       const msg = error?.message || code || 'Login failed. Please try again.';
@@ -345,7 +345,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      return { success: false, message: typeof msg === 'string' ? msg : 'Login failed. Please try again.' };
+      return {
+        success: false,
+        message: formatApiErrorMessage(typeof msg === "string" ? msg : "Login failed. Please try again."),
+      };
     } finally {
       pendingFirebaseSyncOverridesRef.current = null;
       setAuthLoading(false);
@@ -365,9 +368,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(userData);
         return { success: true, user: userData };
       }
-      return { success: false, message: response?.message || 'Registration failed' };
+      return {
+        success: false,
+        message: formatApiErrorMessage(response?.message || "Registration failed"),
+      };
     } catch (error: any) {
-      const msg = error?.message || 'Registration failed. Please try again.';
+      const msg = formatApiErrorMessage(error?.message || "Registration failed. Please try again.");
       if (typeof msg === 'string' && msg.includes('auth/email-already-in-use')) {
         return { success: false, message: 'An account with this email already exists' };
       }

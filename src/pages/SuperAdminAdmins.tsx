@@ -158,7 +158,11 @@ const SuperAdminAdmins = () => {
       );
 
       if (response?.success === false) {
-        throw new Error(response.message || "Failed to create admin");
+        const failErr = new Error(response.message || "Failed to create admin") as Error & {
+          status?: number;
+        };
+        failErr.status = 500;
+        throw failErr;
       }
 
       const data = response?.data ?? response;

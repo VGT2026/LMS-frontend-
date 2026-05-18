@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { formatApiErrorMessage } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,7 +44,7 @@ const Login = () => {
                 : "/dashboard"
         );
       } else {
-        setError(result.message || "Invalid credentials");
+        setError(formatApiErrorMessage(result.message || "Invalid credentials"));
       }
     } catch (error) {
       console.error('Login error:', error);

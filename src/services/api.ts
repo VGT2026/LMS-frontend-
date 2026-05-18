@@ -53,6 +53,20 @@ export function readHttpStatus(error: unknown): number | undefined {
   return undefined;
 }
 
+/** Replace generic API 500 text with actionable copy for the UI. */
+export function formatApiErrorMessage(message: string | undefined, status?: number): string {
+  const raw = (message ?? "").trim();
+  if (/^internal server error$/i.test(raw)) {
+    return "The API server returned an error. Check Railway logs for the failing route, or try again in a few minutes.";
+  }
+  if (status !== undefined && status >= 500) {
+    return raw && !/^internal server error$/i.test(raw)
+      ? raw
+      : `Server error (${status}). Check API logs on Railway.`;
+  }
+  return raw || "Something went wrong. Please try again.";
+}
+
 /** True when the API is down, missing routes, or forbidden — safe to use Super Admin mock storage. */
 export function isSuperAdminApiFallbackError(error: unknown): boolean {
   const status = readHttpStatus(error);
@@ -167,10 +181,11 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<
         (response.status >= 500
           ? `Server error (${response.status}). Check API logs (e.g. Railway).`
           : `HTTP ${response.status}`);
-      const message =
+      const rawMessage =
         errorData.path && typeof errorData.path === "string"
           ? `${baseMsg} — ${errorData.path}`
           : baseMsg;
+      const message = formatApiErrorMessage(rawMessage, response.status);
       // If account is deactivated, clear auth and redirect to login
       if (response.status === 401 && (message.includes('deactivated') || message.includes('Deactivated'))) {
         localStorage.removeItem('lms_token');
@@ -185,7 +200,21 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<
       throw err;
     }
 
-    return await response.json();
+    const payload = await response.json();
+    if (payload && typeof payload === "object" && (payload as { success?: unknown }).success === false) {
+      const apiMsg =
+        typeof (payload as { message?: unknown }).message === "string"
+          ? (payload as { message: string }).message
+          : "";
+      if (response.status >= 500 || /internal server error/i.test(apiMsg)) {
+        const err = new Error(formatApiErrorMessage(apiMsg, response.status)) as Error & {
+          status?: number;
+        };
+        err.status = response.status >= 500 ? response.status : 500;
+        throw err;
+      }
+    }
+    return payload;
   } catch (error) {
     console.error('API request failed:', error);
     throw error;
