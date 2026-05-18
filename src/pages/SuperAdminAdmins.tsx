@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { authAPI, normalizeUsersList } from "@/services/api";
+import { authAPI, isSuperAdminApiFallbackError, normalizeUsersList, readHttpStatus } from "@/services/api";
 import {
   appendMockPlatformAdmin,
   loadMockPlatformAdmins,
@@ -76,14 +76,8 @@ const SuperAdminAdmins = () => {
       }
 
       try {
-        let rows: Record<string, unknown>[] = [];
-        try {
-          const res = await authAPI.listAdmins();
-          rows = normalizeUsersList(res) as Record<string, unknown>[];
-        } catch {
-          const res = await authAPI.getAllUsersWithRetries({ role: "admin", limit: 500 });
-          rows = normalizeUsersList(res) as Record<string, unknown>[];
-        }
+        const res = await authAPI.listAdmins();
+        const rows = normalizeUsersList(res) as Record<string, unknown>[];
         const mapped = rows
           .filter((u) => u.role === "admin")
           .map((u) => apiRowToRecord(u));
@@ -186,7 +180,8 @@ const SuperAdminAdmins = () => {
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to create admin";
-      if (!mockMode && /404|405|not found/i.test(msg)) {
+      const status = readHttpStatus(error);
+      if (!mockMode && (isSuperAdminApiFallbackError(error) || status === 403)) {
         const record = appendMockPlatformAdmin({
           name: formData.name.trim(),
           email: formData.email.toLowerCase(),
@@ -197,7 +192,10 @@ const SuperAdminAdmins = () => {
         setCreateDialogOpen(false);
         toast({
           title: "Saved locally (API unavailable)",
-          description: "Backend endpoint not ready — admin stored in demo mode.",
+          description:
+            status === 403
+              ? "Your account is not authorized as superadmin on the API yet — stored in demo mode."
+              : "Backend error — admin stored in demo mode until the API is fixed.",
         });
       } else {
         toast({ title: "Error", description: msg, variant: "destructive" });

@@ -52,8 +52,15 @@ export const defaultPlatformAdmins: PlatformAdminRecord[] = [
 
 const MOCK_ADMINS_STORAGE_KEY = "lms_mock_platform_admins";
 
+/**
+ * Platform admin CRUD uses local mock data unless explicitly disabled.
+ * Set VITE_USE_MOCK_SUPERADMIN=false when POST/GET /auth/superadmin/* is stable on your API.
+ */
 export function useMockSuperAdmin(): boolean {
-  return import.meta.env.VITE_USE_MOCK_SUPERADMIN === "true";
+  const flag = import.meta.env.VITE_USE_MOCK_SUPERADMIN;
+  if (flag === "false") return false;
+  if (flag === "true") return true;
+  return true;
 }
 
 export function loadMockPlatformAdmins(): PlatformAdminRecord[] {

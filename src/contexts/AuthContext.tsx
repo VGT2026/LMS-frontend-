@@ -309,6 +309,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { success: false, message: lastFirebaseSyncErrorRef.current || "Login failed" };
       }
 
+      if (response.status >= 500) {
+        return {
+          success: false,
+          message:
+            data.message === "Internal server error"
+              ? "The API returned an internal server error. Check Railway logs, or enable VITE_USE_MOCK_SUPERADMIN=true for Super Admin demo mode."
+              : data.message || `Server error (${response.status}). Try again later.`,
+        };
+      }
+
       return { success: false, message: data.message || "Invalid credentials" };
     } catch (error: any) {
       const code = error?.code || '';

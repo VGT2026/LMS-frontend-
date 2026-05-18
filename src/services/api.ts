@@ -45,12 +45,22 @@ const getAuthToken = (): string | null => {
 };
 
 /** Set on errors thrown by `apiRequest` when the HTTP status is known */
-function readHttpStatus(error: unknown): number | undefined {
+export function readHttpStatus(error: unknown): number | undefined {
   if (typeof error === "object" && error !== null && "status" in error) {
     const s = Number((error as { status?: unknown }).status);
     return Number.isFinite(s) ? s : undefined;
   }
   return undefined;
+}
+
+/** True when the API is down, missing routes, or forbidden — safe to use Super Admin mock storage. */
+export function isSuperAdminApiFallbackError(error: unknown): boolean {
+  const status = readHttpStatus(error);
+  if (status !== undefined && (status >= 500 || status === 404 || status === 405 || status === 403)) {
+    return true;
+  }
+  const msg = error instanceof Error ? error.message : String(error ?? "");
+  return /internal server error|server error \(\d+\)|not found|forbidden|403|404|405/i.test(msg);
 }
 
 function normalizeTicketsPayload(res: any): unknown[] {
