@@ -11,6 +11,7 @@ import {
   type User as FirebaseUser,
 } from "firebase/auth";
 import { authAPI, API_BASE_URL, formatApiErrorMessage } from "@/services/api";
+import { parseTenantFromApiUser } from "@/utils/tenant";
 
 export type UserRole = "student" | "instructor" | "admin" | "superadmin";
 
@@ -23,6 +24,9 @@ export interface User {
   preferredCategories?: string[];
   completedCourseIds?: string[];
   targetJobRoleId?: string;
+  /** Set for admin / instructor / student when backend scopes by organization */
+  tenantId?: string;
+  tenantName?: string;
 }
 
 const TOKEN_KEY = "lms_token";
@@ -87,16 +91,22 @@ function resolveUserRole(u: { role?: string; email?: string }): UserRole {
   return "student";
 }
 
-const toUser = (u: any): User => ({
-  id: String(u.id),
-  name: u.name,
-  email: u.email,
-  role: resolveUserRole(u),
-  avatar: u.avatar,
-  preferredCategories: Array.isArray(u.preferred_categories) ? u.preferred_categories : parseIds(u.preferred_categories),
-  completedCourseIds: parseIds(u.completed_course_ids),
-  targetJobRoleId: u.target_job_role_id != null ? String(u.target_job_role_id) : undefined,
-});
+const toUser = (u: any): User => {
+  const role = resolveUserRole(u);
+  const tenant = parseTenantFromApiUser(u);
+  return {
+    id: String(u.id),
+    name: u.name,
+    email: u.email,
+    role,
+    avatar: u.avatar,
+    preferredCategories: Array.isArray(u.preferred_categories) ? u.preferred_categories : parseIds(u.preferred_categories),
+    completedCourseIds: parseIds(u.completed_course_ids),
+    targetJobRoleId: u.target_job_role_id != null ? String(u.target_job_role_id) : undefined,
+    tenantId: role === "superadmin" ? undefined : tenant.tenantId,
+    tenantName: role === "superadmin" ? undefined : tenant.tenantName,
+  };
+};
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(() => loadUser());

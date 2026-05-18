@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Users, BookOpen, DollarSign, TrendingUp, ChevronRight, FileText } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { courseAPI, dashboardAPI, normalizeCoursesList, supportAPI } from "@/services/api";
 
@@ -38,6 +39,7 @@ const chartPlaceholder = [
 ];
 
 const AdminDashboard = () => {
+  const { user } = useAuth();
   const [stats, setStats] = useState<{ totalUsers: number; activeUsers: number; totalCourses: number; activeCourses: number } | null>(null);
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [tickets, setTickets] = useState<SupportTicketRow[]>([]);
@@ -110,7 +112,11 @@ const AdminDashboard = () => {
     <motion.div initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08 } } }} className="space-y-6 max-w-7xl">
       <motion.div variants={fadeUp}>
         <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Platform overview and management</p>
+        <p className="text-muted-foreground mt-1">
+          {user?.tenantName
+            ? `Overview for ${user.tenantName} — users and courses in your organization only.`
+            : "Organization overview and management (scoped by your account)."}
+        </p>
       </motion.div>
 
       {apiIssues.length > 0 && (

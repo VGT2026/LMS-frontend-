@@ -18,6 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { authAPI, formatApiErrorMessage, normalizeUsersList, readHttpStatus } from "@/services/api";
 import type { PlatformAdminRecord } from "@/data/superAdminData";
+import { parseTenantFromApiUser } from "@/utils/tenant";
 import { Shield, UserPlus, Search, ArrowLeft } from "lucide-react";
 
 function formatCreatedAt(iso: string) {
@@ -33,12 +34,15 @@ function formatCreatedAt(iso: string) {
 }
 
 function apiRowToRecord(user: Record<string, unknown>): PlatformAdminRecord {
+  const tenant = parseTenantFromApiUser(user);
   return {
     id: String(user.id ?? ""),
     name: String(user.name ?? "Admin"),
     email: String(user.email ?? ""),
     status: user.is_active === false ? "inactive" : "active",
     createdAt: String(user.created_at ?? user.createdAt ?? new Date().toISOString()),
+    tenantId: tenant.tenantId,
+    tenantName: tenant.tenantName,
   };
 }
 
@@ -57,6 +61,7 @@ const SuperAdminAdmins = () => {
     email: "",
     password: "",
     confirmPassword: "",
+    organizationName: "",
   });
 
   const loadAdmins = useCallback(async () => {
@@ -92,10 +97,10 @@ const SuperAdminAdmins = () => {
   );
 
   const handleCreateAdmin = async () => {
-    if (!formData.name || !formData.email || !formData.password) {
+    if (!formData.name || !formData.email || !formData.password || !formData.organizationName.trim()) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields.",
+        description: "Please fill in name, email, password, and organization name.",
         variant: "destructive",
       });
       return;
@@ -122,7 +127,8 @@ const SuperAdminAdmins = () => {
       const provisioned = await authAPI.provisionPlatformAdmin(
         formData.name.trim(),
         formData.email.toLowerCase(),
-        formData.password
+        formData.password,
+        { tenant_name: formData.organizationName.trim() }
       );
 
       const record: PlatformAdminRecord = {
@@ -131,10 +137,12 @@ const SuperAdminAdmins = () => {
         email: provisioned.user.email,
         status: "active",
         createdAt: new Date().toISOString(),
+        tenantId: provisioned.user.tenantId,
+        tenantName: provisioned.user.tenantName ?? formData.organizationName.trim(),
       };
 
       setAdmins((prev) => [record, ...prev]);
-      setFormData({ name: "", email: "", password: "", confirmPassword: "" });
+      setFormData({ name: "", email: "", password: "", confirmPassword: "", organizationName: "" });
       setCreateDialogOpen(false);
 
       toast({
@@ -267,6 +275,18 @@ const SuperAdminAdmins = () => {
                 />
               </div>
               <div className="grid gap-2">
+                <Label htmlFor="sa-org">Organization name</Label>
+                <Input
+                  id="sa-org"
+                  value={formData.organizationName}
+                  onChange={(e) => setFormData({ ...formData, organizationName: e.target.value })}
+                  placeholder="e.g. Kalpana Institute"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Creates a separate tenant. This admin only sees their org&apos;s instructors, students, and courses.
+                </p>
+              </div>
+              <div className="grid gap-2">
                 <Label htmlFor="sa-password">Password</Label>
                 <Input
                   id="sa-password"
@@ -305,6 +325,7 @@ const SuperAdminAdmins = () => {
             <thead>
               <tr className="border-b border-border bg-muted/30">
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Admin</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Organization</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Created</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Status</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Active</th>
@@ -313,7 +334,7 @@ const SuperAdminAdmins = () => {
             <tbody className="divide-y divide-border">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted-foreground">
                     {loadError ? "Fix the error above and refresh the page." : "No platform admins yet. Create one to get started."}
                   </td>
                 </tr>
@@ -334,6 +355,7 @@ const SuperAdminAdmins = () => {
                         </div>
                       </div>
                     </td>
+                    <td className="px-5 py-3 text-sm text-foreground">{a.tenantName ?? "—"}</td>
                     <td className="px-5 py-3 text-sm text-muted-foreground">{formatCreatedAt(a.createdAt)}</td>
                     <td className="px-5 py-3">
                       <span

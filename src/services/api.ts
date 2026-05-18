@@ -1,4 +1,5 @@
 // API service functions for LMS frontend
+import { parseTenantFromApiUser } from "@/utils/tenant";
 // Dev: omit VITE_API_URL to send requests to `/api` (proxied via VITE_DEV_PROXY_TARGET when set).
 // Production builds must set VITE_API_URL to your deployed API origin (baked in at build time).
 // Appends `/api` for bare origins; preserves custom URL paths unchanged.
@@ -93,6 +94,21 @@ export function normalizeCoursesList(response: unknown): unknown[] {
   if (Array.isArray(r.data)) return r.data;
   if (Array.isArray(r.courses)) return r.courses;
   if (Array.isArray(r.items)) return r.items;
+  return [];
+}
+
+/** Tenants from GET /auth/superadmin/tenants — backends vary (`data`, `tenants`, bare array). */
+export function normalizeTenantsList(response: unknown): unknown[] {
+  if (response == null) return [];
+  if (Array.isArray(response)) return response;
+  if (typeof response !== "object") return [];
+  const r = response as Record<string, unknown>;
+  if (Array.isArray(r.data)) return r.data;
+  if (Array.isArray(r.tenants)) return r.tenants;
+  if (r.data && typeof r.data === "object") {
+    const inner = r.data as Record<string, unknown>;
+    if (Array.isArray(inner.tenants)) return inner.tenants;
+  }
   return [];
 }
 
@@ -273,18 +289,51 @@ export const authAPI = {
       body: JSON.stringify({ name, email, password }),
     }),
 
-  /** Superadmin: create a platform LMS admin account */
-  createAdmin: (name: string, email: string, password: string) =>
+  /** Superadmin: list organizations / tenants */
+  listTenants: (params?: { page?: number; limit?: number; search?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.search) searchParams.append('search', params.search);
+    const qs = searchParams.toString();
+    return apiRequest(`/auth/superadmin/tenants${qs ? `?${qs}` : ''}`);
+  },
+
+  /** Superadmin: create organization (optional — backend may auto-create on admin create) */
+  createTenant: (name: string) =>
+    apiRequest('/auth/superadmin/tenants', {
+      method: 'POST',
+      body: JSON.stringify({ name: name.trim() }),
+    }),
+
+  /** Superadmin: create a platform LMS admin account (optionally linked to a tenant) */
+  createAdmin: (
+    name: string,
+    email: string,
+    password: string,
+    options?: { tenant_id?: string | number; tenant_name?: string }
+  ) =>
     apiRequest('/auth/superadmin/admin', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+        ...(options?.tenant_id != null ? { tenant_id: options.tenant_id } : {}),
+        ...(options?.tenant_name?.trim() ? { tenant_name: options.tenant_name.trim() } : {}),
+      }),
     }),
 
   /**
    * Create a real LMS admin login (database user). Tries superadmin createAdmin, then register.
    * Requires the current session to be logged in (Bearer token on API calls).
    */
-  provisionPlatformAdmin: async (name: string, email: string, password: string) => {
+  provisionPlatformAdmin: async (
+    name: string,
+    email: string,
+    password: string,
+    options?: { tenant_id?: string | number; tenant_name?: string }
+  ) => {
     const emailNorm = email.toLowerCase().trim();
     const nameTrim = name.trim();
 
@@ -293,15 +342,22 @@ export const authAPI = {
       name: string;
       email: string;
       role?: string;
-    } => ({
-      id: String(created.id ?? ""),
-      name: String(created.name ?? nameTrim),
-      email: String(created.email ?? emailNorm),
-      role: created.role != null ? String(created.role) : undefined,
-    });
+      tenantId?: string;
+      tenantName?: string;
+    } => {
+      const tenant = parseTenantFromApiUser(created);
+      return {
+        id: String(created.id ?? ""),
+        name: String(created.name ?? nameTrim),
+        email: String(created.email ?? emailNorm),
+        role: created.role != null ? String(created.role) : undefined,
+        tenantId: tenant.tenantId,
+        tenantName: tenant.tenantName,
+      };
+    };
 
     try {
-      const res = await authAPI.createAdmin(nameTrim, emailNorm, password);
+      const res = await authAPI.createAdmin(nameTrim, emailNorm, password, options);
       if (res?.success === false) {
         throw new Error(res.message || "Failed to create admin");
       }
@@ -359,11 +415,14 @@ export const authAPI = {
   },
 
   /** Superadmin / admin: list students (prefers dedicated route when available). */
-  listStudents: (params?: { page?: number; limit?: number; search?: string }) => {
+  listStudents: (params?: { page?: number; limit?: number; search?: string; tenant_id?: string | number }) => {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.append('page', params.page.toString());
     if (params?.limit) searchParams.append('limit', params.limit.toString());
     if (params?.search) searchParams.append('search', params.search);
+    if (params?.tenant_id != null && params.tenant_id !== '') {
+      searchParams.append('tenant_id', String(params.tenant_id));
+    }
     const qs = searchParams.toString();
     return apiRequest(`/auth/superadmin/students${qs ? `?${qs}` : ''}`).catch(() =>
       authAPI.getAllUsersWithRetries({ ...params, role: 'student', limit: params?.limit ?? 500 })
@@ -371,11 +430,14 @@ export const authAPI = {
   },
 
   /** Superadmin / admin: list instructors (prefers dedicated route when available). */
-  listInstructors: (params?: { page?: number; limit?: number; search?: string }) => {
+  listInstructors: (params?: { page?: number; limit?: number; search?: string; tenant_id?: string | number }) => {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.append('page', params.page.toString());
     if (params?.limit) searchParams.append('limit', params.limit.toString());
     if (params?.search) searchParams.append('search', params.search);
+    if (params?.tenant_id != null && params.tenant_id !== '') {
+      searchParams.append('tenant_id', String(params.tenant_id));
+    }
     const qs = searchParams.toString();
     return apiRequest(`/auth/superadmin/instructors${qs ? `?${qs}` : ''}`).catch(() =>
       authAPI.fetchInstructorsList().then((rows) => ({

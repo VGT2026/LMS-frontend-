@@ -8,7 +8,22 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { authAPI, formatApiErrorMessage, normalizeUsersList, readHttpStatus } from "@/services/api";
+import {
+  authAPI,
+  formatApiErrorMessage,
+  normalizeTenantsList,
+  normalizeUsersList,
+  readHttpStatus,
+} from "@/services/api";
+import type { TenantRecord } from "@/data/superAdminData";
+import { parseTenantFromApiUser } from "@/utils/tenant";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ArrowLeft, BookOpen, GraduationCap, Search, Users } from "lucide-react";
 
 export interface PlatformUserRow {
@@ -19,9 +34,11 @@ export interface PlatformUserRow {
   status: "active" | "inactive";
   enrolled: number;
   createdAt: string;
+  tenantName?: string;
 }
 
 function mapApiUser(user: Record<string, unknown>, role: "student" | "instructor"): PlatformUserRow {
+  const tenant = parseTenantFromApiUser(user);
   return {
     id: String(user.id ?? ""),
     name: String(user.name ?? "—"),
@@ -30,6 +47,7 @@ function mapApiUser(user: Record<string, unknown>, role: "student" | "instructor
     status: user.is_active === false || user.is_active === 0 ? "inactive" : "active",
     enrolled: Number(user.enrolled ?? 0),
     createdAt: String(user.created_at ?? user.createdAt ?? ""),
+    tenantName: tenant.tenantName,
   };
 }
 
@@ -64,6 +82,7 @@ function UsersTable({
           <thead>
             <tr className="border-b border-border bg-muted/30">
               <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">User</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Organization</th>
               <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Enrolled</th>
               <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Joined</th>
               <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Status</th>
@@ -73,7 +92,7 @@ function UsersTable({
           <tbody className="divide-y divide-border">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={6} className="px-5 py-10 text-center text-sm text-muted-foreground">
                   {emptyMessage}
                 </td>
               </tr>
@@ -92,6 +111,7 @@ function UsersTable({
                       </div>
                     </div>
                   </td>
+                  <td className="px-5 py-3 text-sm text-muted-foreground">{u.tenantName ?? "—"}</td>
                   <td className="px-5 py-3 text-sm text-foreground">{u.enrolled} course{u.enrolled === 1 ? "" : "s"}</td>
                   <td className="px-5 py-3 text-sm text-muted-foreground">{formatCreatedAt(u.createdAt)}</td>
                   <td className="px-5 py-3">
@@ -130,14 +150,34 @@ const SuperAdminUsers = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [tenantFilter, setTenantFilter] = useState<string>("all");
+  const [tenants, setTenants] = useState<TenantRecord[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await authAPI.listTenants({ limit: 200 });
+        const rows = normalizeTenantsList(res) as Record<string, unknown>[];
+        setTenants(
+          rows.map((r) => ({
+            id: String(r.id ?? ""),
+            name: String(r.name ?? "Organization"),
+          }))
+        );
+      } catch {
+        setTenants([]);
+      }
+    })();
+  }, []);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
+    const tenantId = tenantFilter !== "all" ? tenantFilter : undefined;
     try {
       const [studentsRes, instructorsRes] = await Promise.all([
-        authAPI.listStudents({ limit: 500, search: search.trim() || undefined }),
-        authAPI.listInstructors({ limit: 500, search: search.trim() || undefined }),
+        authAPI.listStudents({ limit: 500, search: search.trim() || undefined, tenant_id: tenantId }),
+        authAPI.listInstructors({ limit: 500, search: search.trim() || undefined, tenant_id: tenantId }),
       ]);
 
       const studentRows = normalizeUsersList(studentsRes) as Record<string, unknown>[];
@@ -164,12 +204,12 @@ const SuperAdminUsers = () => {
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, tenantFilter]);
 
   useEffect(() => {
     const t = window.setTimeout(() => void loadUsers(), search ? 300 : 0);
     return () => window.clearTimeout(t);
-  }, [loadUsers, search]);
+  }, [loadUsers, search, tenantFilter]);
 
   const filterRows = (rows: PlatformUserRow[]) => {
     const q = search.trim().toLowerCase();
@@ -264,14 +304,31 @@ const SuperAdminUsers = () => {
         </Alert>
       )}
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Search name, email, or ID..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search name, email, or ID..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        {tenants.length > 0 && (
+          <Select value={tenantFilter} onValueChange={setTenantFilter}>
+            <SelectTrigger className="w-full sm:w-[220px]">
+              <SelectValue placeholder="All organizations" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All organizations</SelectItem>
+              {tenants.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "students" | "instructors")}>

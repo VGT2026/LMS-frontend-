@@ -6,6 +6,15 @@ export interface PlatformAdminRecord {
   email: string;
   status: "active" | "inactive";
   createdAt: string;
+  tenantId?: string;
+  tenantName?: string;
+}
+
+export interface TenantRecord {
+  id: string;
+  name: string;
+  isActive?: boolean;
+  createdAt?: string;
 }
 
 export const superAdminStats = {

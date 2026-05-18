@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { authAPI, courseAPI, normalizeCoursesList } from "@/services/api";
 import { BookOpen, Search, Users, TrendingUp, ToggleLeft, ToggleRight, UserCheck, Settings, Pencil, PlusCircle, XCircle } from "lucide-react";
 
@@ -35,6 +36,7 @@ interface CourseRow {
 const PREDEFINED_CATEGORIES = ["Development", "Data Science", "Design", "Business", "Security", "Cloud & DevOps"];
 
 const AdminCoursesPage = () => {
+    const { user } = useAuth();
     const { toast } = useToast();
     const [coursesData, setCoursesData] = useState<CourseRow[]>([]);
     const [instructors, setInstructors] = useState<Instructor[]>([]);
@@ -234,7 +236,11 @@ const AdminCoursesPage = () => {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Manage Courses</h1>
-                    <p className="text-muted-foreground mt-1">{coursesData.length} total courses</p>
+                    <p className="text-muted-foreground mt-1">
+                      {user?.tenantName
+                        ? `${coursesData.length} courses in ${user.tenantName}`
+                        : `${coursesData.length} courses in your organization`}
+                    </p>
                 </div>
                 <Button asChild className="gap-1.5">
                     <Link to="/admin/create-course">

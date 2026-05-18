@@ -6,7 +6,9 @@ import {
   Settings, HelpCircle, GraduationCap, Bell, Search, ChevronDown, ChevronRight,
   LogOut, User, Users, PlusCircle, FileText, Menu, X, Bot, Wand2, Sparkles, Map,
   Shield,
+  Building2,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -88,6 +90,7 @@ const superadminNav: NavItem[] = [
   { label: "Platform Dashboard", icon: <LayoutDashboard className="w-5 h-5" />, path: "/superadmin" },
   { label: "Platform Admins", icon: <Shield className="w-5 h-5" />, path: "/superadmin/admins" },
   { label: "Students & Instructors", icon: <Users className="w-5 h-5" />, path: "/superadmin/users" },
+  { label: "Organizations", icon: <Building2 className="w-5 h-5" />, path: "/superadmin/tenants" },
   { label: "LMS Admin Panel", icon: <BookOpen className="w-5 h-5" />, path: "/admin" },
   { label: "Settings", icon: <Settings className="w-5 h-5" />, path: "/settings" },
 ];
@@ -348,6 +351,12 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
           </div>
 
           <div className="flex items-center gap-2">
+            {user?.tenantName && user.role !== "superadmin" && (
+              <Badge variant="secondary" className="hidden md:inline-flex gap-1 font-normal max-w-[200px] truncate">
+                <Building2 className="w-3.5 h-3.5 shrink-0" />
+                {user.tenantName}
+              </Badge>
+            )}
             {/* Notifications */}
             <div className="relative">
               <button

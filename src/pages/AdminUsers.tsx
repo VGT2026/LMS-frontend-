@@ -213,7 +213,11 @@ const AdminUsersPage = () => {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-6">
             <div>
                 <h1 className="text-2xl font-bold text-foreground">Manage Users</h1>
-                <p className="text-muted-foreground mt-1">{usersData.length} registered users</p>
+                <p className="text-muted-foreground mt-1">
+                  {user?.tenantName
+                    ? `${usersData.length} users in ${user.tenantName}`
+                    : `${usersData.length} registered users in your organization`}
+                </p>
             </div>
 
             {/* Summary */}
