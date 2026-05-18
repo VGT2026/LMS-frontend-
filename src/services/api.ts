@@ -280,6 +280,84 @@ export const authAPI = {
       body: JSON.stringify({ name, email, password }),
     }),
 
+  /**
+   * Create a real LMS admin login (database user). Tries superadmin createAdmin, then register.
+   * Requires the current session to be logged in (Bearer token on API calls).
+   */
+  provisionPlatformAdmin: async (name: string, email: string, password: string) => {
+    const emailNorm = email.toLowerCase().trim();
+    const nameTrim = name.trim();
+
+    const toRecord = (created: Record<string, unknown>): {
+      id: string;
+      name: string;
+      email: string;
+      role?: string;
+    } => ({
+      id: String(created.id ?? ""),
+      name: String(created.name ?? nameTrim),
+      email: String(created.email ?? emailNorm),
+      role: created.role != null ? String(created.role) : undefined,
+    });
+
+    try {
+      const res = await authAPI.createAdmin(nameTrim, emailNorm, password);
+      if (res?.success === false) {
+        throw new Error(res.message || "Failed to create admin");
+      }
+      const data = res?.data ?? res;
+      const created = (data?.admin ?? data?.user ?? data) as Record<string, unknown>;
+      return {
+        method: "createAdmin" as const,
+        user: toRecord(created),
+        roleWarning: undefined as string | undefined,
+      };
+    } catch (createErr) {
+      const tryRegister = isSuperAdminApiFallbackError(createErr);
+      if (!tryRegister) {
+        const status = readHttpStatus(createErr);
+        const msg = createErr instanceof Error ? createErr.message : "";
+        if (status !== 403 && status !== 404 && status !== 405 && status !== 500) {
+          throw createErr;
+        }
+      }
+
+      const reg = await authAPI.register(nameTrim, emailNorm, password, password);
+      if (reg?.success === false) {
+        const m = String(reg.message ?? "");
+        if (/already|exists|duplicate|registered/i.test(m)) {
+          throw new Error(
+            "This email is already registered. They can use Forgot password on the login page, or use a different email."
+          );
+        }
+        throw new Error(m || "Could not register this admin");
+      }
+
+      const data = reg?.data ?? reg;
+      const u = (data?.user ?? data) as Record<string, unknown>;
+      const userId = u?.id;
+      if (!userId) {
+        throw new Error("Registration succeeded but no user id was returned");
+      }
+
+      let roleWarning: string | undefined =
+        "Account created. They can log in, but the server did not assign admin role automatically — they may land on the student dashboard until an admin role is set in the database.";
+
+      try {
+        await authAPI.updateUserRole(Number(userId), "admin");
+        roleWarning = undefined;
+      } catch {
+        /* insufficient permissions on many deployments */
+      }
+
+      return {
+        method: "register" as const,
+        user: toRecord(u),
+        roleWarning,
+      };
+    }
+  },
+
   /** Superadmin: list platform admin users */
   listAdmins: (params?: { page?: number; limit?: number; search?: string }) => {
     const searchParams = new URLSearchParams();

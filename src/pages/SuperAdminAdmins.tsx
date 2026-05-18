@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { authAPI, isSuperAdminApiFallbackError, normalizeUsersList, readHttpStatus } from "@/services/api";
 import {
@@ -45,6 +46,7 @@ function apiRowToRecord(user: Record<string, unknown>): PlatformAdminRecord {
     email: String(user.email ?? ""),
     status: user.is_active === false ? "inactive" : "active",
     createdAt: String(user.created_at ?? user.createdAt ?? new Date().toISOString()),
+    loginReady: true,
   };
 }
 
@@ -136,56 +138,43 @@ const SuperAdminAdmins = () => {
 
     setIsCreating(true);
     try {
-      if (mockMode || usingMockFallback) {
-        const record = appendMockPlatformAdmin({
-          name: formData.name.trim(),
-          email: formData.email.toLowerCase(),
-        });
-        setAdmins((prev) => [record, ...prev]);
-        setFormData({ name: "", email: "", password: "", confirmPassword: "" });
-        setCreateDialogOpen(false);
-        toast({
-          title: "Admin created (demo)",
-          description: `${record.name} was added to local mock storage. Enable the API for real accounts.`,
-        });
-        return;
-      }
-
-      const response = await authAPI.createAdmin(
+      const provisioned = await authAPI.provisionPlatformAdmin(
         formData.name.trim(),
         formData.email.toLowerCase(),
         formData.password
       );
 
-      if (response?.success === false) {
-        const failErr = new Error(response.message || "Failed to create admin") as Error & {
-          status?: number;
-        };
-        failErr.status = 500;
-        throw failErr;
-      }
-
-      const data = response?.data ?? response;
-      const created = data?.admin ?? data?.user ?? data;
       const record: PlatformAdminRecord = {
-        id: String(created?.id ?? Date.now()),
-        name: created?.name ?? formData.name.trim(),
-        email: created?.email ?? formData.email.toLowerCase(),
+        id: provisioned.user.id || String(Date.now()),
+        name: provisioned.user.name,
+        email: provisioned.user.email,
         status: "active",
-        createdAt: created?.created_at ?? new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        loginReady: true,
       };
 
       setAdmins((prev) => [record, ...prev]);
+      setUsingMockFallback(false);
       setFormData({ name: "", email: "", password: "", confirmPassword: "" });
       setCreateDialogOpen(false);
+
       toast({
-        title: "Success",
-        description: `Admin account created for ${record.name}.`,
+        title: "Admin can log in",
+        description: `${record.name} was created on the server. They sign in at /login with the email and password you set, then open /admin.`,
       });
+
+      if (provisioned.roleWarning) {
+        toast({
+          title: "Role notice",
+          description: provisioned.roleWarning,
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to create admin";
       const status = readHttpStatus(error);
-      if (!mockMode && (isSuperAdminApiFallbackError(error) || status === 403)) {
+
+      if (isSuperAdminApiFallbackError(error) || status === 403) {
         const record = appendMockPlatformAdmin({
           name: formData.name.trim(),
           email: formData.email.toLowerCase(),
@@ -195,11 +184,10 @@ const SuperAdminAdmins = () => {
         setFormData({ name: "", email: "", password: "", confirmPassword: "" });
         setCreateDialogOpen(false);
         toast({
-          title: "Saved locally (API unavailable)",
+          title: "Demo list only — cannot log in",
           description:
-            status === 403
-              ? "Your account is not authorized as superadmin on the API yet — stored in demo mode."
-              : "Backend error — admin stored in demo mode until the API is fixed.",
+            "Sign in as superadmin first, then create again. Demo-only rows are not real accounts. Log out and log in as superadmin@lmspro.com (or fix API permissions).",
+          variant: "destructive",
         });
       } else {
         toast({ title: "Error", description: msg, variant: "destructive" });
@@ -295,10 +283,16 @@ const SuperAdminAdmins = () => {
             <DialogHeader>
               <DialogTitle>Create platform admin</DialogTitle>
               <DialogDescription>
-                Adds an LMS admin who can manage courses, users, and instructors. Only super admins can create admins.
+                Creates a real account on the LMS server. The new admin signs in at /login with this email and password, then uses /admin.
               </DialogDescription>
             </DialogHeader>
-            <motion.div className="grid gap-4 py-4">
+            <Alert className="mx-6 mb-0">
+              <AlertTitle>You must be signed in as Super Admin</AlertTitle>
+              <AlertDescription className="text-xs">
+                Creating an admin here calls the API (not browser demo storage). If you only see “demo” toasts, log in as your superadmin user first, then create again.
+              </AlertDescription>
+            </Alert>
+            <div className="grid gap-4 py-4 px-6">
               <div className="grid gap-2">
                 <Label htmlFor="sa-name">Full name</Label>
                 <Input
@@ -338,15 +332,15 @@ const SuperAdminAdmins = () => {
                   placeholder="Confirm password"
                 />
               </div>
-            </motion.div>
-            <div className="flex justify-end gap-3">
+            </div>
+            <motion.div className="flex justify-end gap-3 px-6 pb-6">
               <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={isCreating}>
                 Cancel
               </Button>
               <Button onClick={() => void handleCreateAdmin()} disabled={isCreating}>
                 {isCreating ? "Creating..." : "Create admin"}
               </Button>
-            </div>
+            </motion.div>
           </DialogContent>
         </Dialog>
       </motion.div>
@@ -359,13 +353,14 @@ const SuperAdminAdmins = () => {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Admin</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Created</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Status</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Login</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Active</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted-foreground">
                     No platform admins yet. Create one to get started.
                   </td>
                 </tr>
@@ -395,6 +390,17 @@ const SuperAdminAdmins = () => {
                       >
                         {a.status}
                       </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      {a.loginReady !== false ? (
+                        <Badge variant="secondary" className="text-xs font-normal">
+                          Can sign in
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                          Demo only
+                        </Badge>
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       <Switch

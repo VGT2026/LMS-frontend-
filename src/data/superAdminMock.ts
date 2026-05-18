@@ -6,6 +6,8 @@ export interface PlatformAdminRecord {
   email: string;
   status: "active" | "inactive";
   createdAt: string;
+  /** False for browser-only demo rows — those emails cannot sign in. */
+  loginReady?: boolean;
 }
 
 export const superAdminStats = {
@@ -40,6 +42,7 @@ export const defaultPlatformAdmins: PlatformAdminRecord[] = [
     email: "admin@teachsmart.io",
     status: "active",
     createdAt: "2025-11-01T10:00:00.000Z",
+    loginReady: false,
   },
   {
     id: "mock-admin-2",
@@ -47,6 +50,7 @@ export const defaultPlatformAdmins: PlatformAdminRecord[] = [
     email: "regional@teachsmart.io",
     status: "active",
     createdAt: "2026-01-15T14:30:00.000Z",
+    loginReady: false,
   },
 ];
 
@@ -71,7 +75,8 @@ export function loadMockPlatformAdmins(): PlatformAdminRecord[] {
       return [...defaultPlatformAdmins];
     }
     const parsed = JSON.parse(raw) as PlatformAdminRecord[];
-    return Array.isArray(parsed) ? parsed : [...defaultPlatformAdmins];
+    if (!Array.isArray(parsed)) return [...defaultPlatformAdmins];
+    return parsed.map((a) => ({ ...a, loginReady: a.loginReady === true }));
   } catch {
     return [...defaultPlatformAdmins];
   }
@@ -91,6 +96,7 @@ export function appendMockPlatformAdmin(
     email: input.email.toLowerCase(),
     status: input.status ?? "active",
     createdAt: new Date().toISOString(),
+    loginReady: false,
   };
   saveMockPlatformAdmins([record, ...admins]);
   return record;
