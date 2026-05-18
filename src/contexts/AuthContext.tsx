@@ -310,13 +310,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (!data.success) {
-        return {
-          success: false,
-          message: formatApiErrorMessage(
-            typeof data.message === "string" ? data.message : undefined,
-            response.status
-          ),
-        };
+        const apiMessage =
+          typeof data.message === "string" ? data.message : undefined;
+        const friendly =
+          response.status === 401 && /invalid credentials/i.test(apiMessage ?? "")
+            ? "Invalid email or password. This account may not exist yet — register first, or use the email/password stored in the LMS database (demo admins in Super Admin do not create logins)."
+            : formatApiErrorMessage(apiMessage, response.status);
+        return { success: false, message: friendly };
       }
 
       return { success: false, message: formatApiErrorMessage("Invalid credentials", response.status) };
