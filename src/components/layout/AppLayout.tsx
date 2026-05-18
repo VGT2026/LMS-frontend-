@@ -87,7 +87,8 @@ const adminNav: NavItem[] = [
 const superadminNav: NavItem[] = [
   { label: "Platform Dashboard", icon: <LayoutDashboard className="w-5 h-5" />, path: "/superadmin" },
   { label: "Platform Admins", icon: <Shield className="w-5 h-5" />, path: "/superadmin/admins" },
-  { label: "LMS Admin Panel", icon: <Users className="w-5 h-5" />, path: "/admin" },
+  { label: "Students & Instructors", icon: <Users className="w-5 h-5" />, path: "/superadmin/users" },
+  { label: "LMS Admin Panel", icon: <BookOpen className="w-5 h-5" />, path: "/admin" },
   { label: "Settings", icon: <Settings className="w-5 h-5" />, path: "/settings" },
 ];
 

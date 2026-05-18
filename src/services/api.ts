@@ -358,6 +358,33 @@ export const authAPI = {
     }
   },
 
+  /** Superadmin / admin: list students (prefers dedicated route when available). */
+  listStudents: (params?: { page?: number; limit?: number; search?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.search) searchParams.append('search', params.search);
+    const qs = searchParams.toString();
+    return apiRequest(`/auth/superadmin/students${qs ? `?${qs}` : ''}`).catch(() =>
+      authAPI.getAllUsersWithRetries({ ...params, role: 'student', limit: params?.limit ?? 500 })
+    );
+  },
+
+  /** Superadmin / admin: list instructors (prefers dedicated route when available). */
+  listInstructors: (params?: { page?: number; limit?: number; search?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.search) searchParams.append('search', params.search);
+    const qs = searchParams.toString();
+    return apiRequest(`/auth/superadmin/instructors${qs ? `?${qs}` : ''}`).catch(() =>
+      authAPI.fetchInstructorsList().then((rows) => ({
+        success: true,
+        data: rows,
+      }))
+    );
+  },
+
   /** Superadmin: list platform admin users */
   listAdmins: (params?: { page?: number; limit?: number; search?: string }) => {
     const searchParams = new URLSearchParams();
