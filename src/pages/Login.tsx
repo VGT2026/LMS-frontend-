@@ -64,12 +64,12 @@ const Login = () => {
           transition={{ duration: 0.5 }}
           className="w-full max-w-md"
         >
-          <div className="flex items-center gap-3 mb-8">
+          <Link to="/" className="flex items-center gap-3 mb-8 hover:opacity-90 transition-opacity">
             <div className="w-10 h-10 rounded-lg bg-gradient-primary flex items-center justify-center">
               <GraduationCap className="w-6 h-6 text-primary-foreground" />
             </div>
             <span className="text-2xl font-bold text-foreground">LMS Pro</span>
-          </div>
+          </Link>
 
           <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back</h1>
           <p className="text-muted-foreground mb-8">Sign in to continue your learning journey</p>
