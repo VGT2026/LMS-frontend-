@@ -89,6 +89,16 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
             >
               Enterprise
             </Link>
+            <Link
+              to="/contact"
+              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                isActive("/contact")
+                  ? "text-foreground bg-muted"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Contact
+            </Link>
           </nav>
 
           <div className="hidden md:flex items-center gap-2">
@@ -134,6 +144,13 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
                   {link.label}
                 </Link>
               ))}
+              <Link
+                to="/contact"
+                className="block py-2 text-sm font-medium"
+                onClick={() => setMobileOpen(false)}
+              >
+                Contact
+              </Link>
               <div className="flex flex-col gap-2 pt-4">
                 <Button variant="outline" asChild className="w-full">
                   <Link to="/login">Sign in</Link>
@@ -186,6 +203,11 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
                 <li>
                   <Link to="/solutions/platform" className="hover:text-accent transition-colors">
                     Multi-tenant platform
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/contact" className="hover:text-accent transition-colors">
+                    Contact us
                   </Link>
                 </li>
               </ul>

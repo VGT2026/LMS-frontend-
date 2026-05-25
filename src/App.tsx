@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AssignmentProvider } from "@/contexts/AssignmentContext";
 import Landing from "./pages/Landing";
 import SolutionPage from "./pages/marketing/SolutionPage";
+import Contact from "./pages/marketing/Contact";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -107,6 +108,7 @@ const AppRoutes = () => {
         element={isAuthenticated ? <Navigate to={getDefaultRedirect()} replace /> : <Landing />}
       />
       <Route path="/solutions/:slug" element={<SolutionPage />} />
+      <Route path="/contact" element={<Contact />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/courses/my-enrolled" element={<ProtectedRoute><Courses view="my-enrolled" /></ProtectedRoute>} />
       <Route path="/courses" element={<ProtectedRoute><Courses /></ProtectedRoute>} />

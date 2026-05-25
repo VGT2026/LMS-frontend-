@@ -229,6 +229,12 @@ const Landing = () => {
               <Link to="/login">Sign in</Link>
             </Button>
           </div>
+          <p className="mt-6 text-sm text-muted-foreground">
+            Questions for your organization?{" "}
+            <Link to="/contact" className="text-accent font-medium hover:underline">
+              Contact our team
+            </Link>
+          </p>
         </motion.div>
       </section>
     </MarketingLayout>
