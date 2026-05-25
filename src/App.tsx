@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AssignmentProvider } from "@/contexts/AssignmentContext";
 import Landing from "./pages/Landing";
+import SolutionPage from "./pages/marketing/SolutionPage";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -105,6 +106,7 @@ const AppRoutes = () => {
         path="/"
         element={isAuthenticated ? <Navigate to={getDefaultRedirect()} replace /> : <Landing />}
       />
+      <Route path="/solutions/:slug" element={<SolutionPage />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/courses/my-enrolled" element={<ProtectedRoute><Courses view="my-enrolled" /></ProtectedRoute>} />
       <Route path="/courses" element={<ProtectedRoute><Courses /></ProtectedRoute>} />

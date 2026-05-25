@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,74 +12,22 @@ import {
   LayoutDashboard,
   Bot,
   Sparkles,
-  FileText,
-  Award,
-  MessageSquare,
-  Calendar,
-  BarChart3,
-  Wand2,
   Building2,
-  ClipboardList,
-  Map,
-  Menu,
-  X,
   ChevronRight,
-  CheckCircle2,
+  ArrowRight,
 } from "lucide-react";
+import { dashboardSolutions } from "@/data/marketingContent";
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.45 } },
+  hidden: { opacity: 0, y: 24 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: "easeOut" as const } },
 };
 
-const portals = [
-  {
-    role: "Student",
-    path: "/dashboard",
-    color: "text-accent bg-accent/10",
-    icon: GraduationCap,
-    description: "Personal learning hub with enrolled courses, career roadmap, and AI study tools.",
-    highlights: ["Dashboard & progress", "Courses & exams", "AI Tutor & Summarizer", "Grades & certificates"],
-  },
-  {
-    role: "Instructor",
-    path: "/instructor",
-    color: "text-primary bg-primary/10",
-    icon: Users,
-    description: "Teach, grade, and manage your classes with assignments, quizzes, and student insights.",
-    highlights: ["My courses", "Assignments & grading", "AI Quiz Generator", "Student roster"],
-  },
-  {
-    role: "Organization Admin",
-    path: "/admin",
-    color: "text-warning bg-warning/10",
-    icon: LayoutDashboard,
-    description: "Run your tenant: courses, users, instructors, and reports — isolated to your organization.",
-    highlights: ["Admin dashboard", "Course management", "User & instructor admin", "Reports & support"],
-  },
-  {
-    role: "Super Admin",
-    path: "/superadmin",
-    color: "text-info bg-info/10",
-    icon: Shield,
-    description: "Platform control: organizations, platform admins, and all students & instructors.",
-    highlights: ["Platform metrics", "Organizations", "Platform admins", "Global user directory"],
-  },
-];
-
-const features = [
-  { icon: BookOpen, title: "Course catalog", desc: "Browse, enroll, and complete structured courses with modules and media." },
-  { icon: ClipboardList, title: "Assignments & exams", desc: "Submit work, take proctored quizzes, and receive instructor feedback." },
-  { icon: Bot, title: "AI Tutor", desc: "Get instant help and explanations tailored to your learning path." },
-  { icon: Sparkles, title: "AI Summarizer", desc: "Upload content and generate concise study summaries." },
-  { icon: Wand2, title: "AI Quiz Generator", desc: "Instructors create assessments from course material in minutes." },
-  { icon: Map, title: "Career roadmap", desc: "Track skills and job-role progress toward your target career." },
-  { icon: MessageSquare, title: "Messages & discussions", desc: "Collaborate with peers and instructors in one place." },
-  { icon: Calendar, title: "Calendar & deadlines", desc: "Never miss a quiz, assignment, or live session." },
-  { icon: BarChart3, title: "Grades & analytics", desc: "Transparent scoring for learners; reports for admins." },
-  { icon: Award, title: "Certificates", desc: "Earn and download credentials when you complete courses." },
-  { icon: Building2, title: "Multi-tenant orgs", desc: "Each organization gets isolated admins, users, and courses." },
-  { icon: FileText, title: "Support tickets", desc: "Built-in help desk for students, instructors, and admins." },
+const premiumFeatures = [
+  { icon: BookOpen, title: "Structured learning", desc: "Courses, modules, and assessments in one flow." },
+  { icon: Bot, title: "AI Tutor", desc: "Instant, contextual help while you study." },
+  { icon: Sparkles, title: "AI Summarizer", desc: "Turn long readings into review-ready notes." },
+  { icon: Building2, title: "Multi-tenant", desc: "Isolated organizations on a single platform." },
 ];
 
 function getDashboardPath(role: string | undefined): string {
@@ -91,114 +39,51 @@ function getDashboardPath(role: string | undefined): string {
 
 const Landing = () => {
   const { isAuthenticated, user } = useAuth();
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   if (isAuthenticated && user) {
     return <Navigate to={getDashboardPath(user.role)} replace />;
   }
 
-  const scrollTo = (id: string) => {
-    setMobileOpen(false);
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-  };
-
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-gradient-primary flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-lg font-bold text-foreground">LMS Pro</span>
-          </Link>
-
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
-            <button type="button" onClick={() => scrollTo("features")} className="hover:text-foreground transition-colors">
-              Features
-            </button>
-            <button type="button" onClick={() => scrollTo("portals")} className="hover:text-foreground transition-colors">
-              Dashboards
-            </button>
-            <button type="button" onClick={() => scrollTo("platform")} className="hover:text-foreground transition-colors">
-              Platform
-            </button>
-          </nav>
-
-          <div className="hidden md:flex items-center gap-2">
-            <Button variant="ghost" asChild>
-              <Link to="/login">Sign in</Link>
-            </Button>
-            <Button asChild className="bg-accent hover:bg-accent/90">
-              <Link to="/register">Get started</Link>
-            </Button>
-          </div>
-
-          <button
-            type="button"
-            className="md:hidden p-2 text-muted-foreground"
-            onClick={() => setMobileOpen((o) => !o)}
-            aria-label="Menu"
-          >
-            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-        </div>
-
-        <AnimatePresence>
-          {mobileOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="md:hidden border-t border-border bg-card px-4 py-4 space-y-3"
-            >
-              <button type="button" className="block w-full text-left text-sm" onClick={() => scrollTo("features")}>
-                Features
-              </button>
-              <button type="button" className="block w-full text-left text-sm" onClick={() => scrollTo("portals")}>
-                Dashboards
-              </button>
-              <button type="button" className="block w-full text-left text-sm" onClick={() => scrollTo("platform")}>
-                Platform
-              </button>
-              <div className="flex flex-col gap-2 pt-2">
-                <Button variant="outline" asChild className="w-full">
-                  <Link to="/login">Sign in</Link>
-                </Button>
-                <Button asChild className="w-full bg-accent hover:bg-accent/90">
-                  <Link to="/register">Get started</Link>
-                </Button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </header>
-
+    <MarketingLayout>
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-hero text-primary-foreground">
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute top-10 left-10 w-64 h-64 rounded-full bg-accent blur-3xl" />
-          <div className="absolute bottom-10 right-10 w-80 h-80 rounded-full bg-primary-foreground blur-3xl" />
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-hero" />
+        <div className="absolute inset-0">
+          <div className="absolute top-1/4 -left-20 w-[420px] h-[420px] rounded-full bg-accent/30 blur-[120px]" />
+          <div className="absolute bottom-0 right-0 w-[500px] h-[500px] rounded-full bg-primary-foreground/10 blur-[100px]" />
         </div>
-        <div className="relative max-w-6xl mx-auto px-4 py-20 lg:py-28">
-          <motion.div initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.1 } } }}>
+        <div className="relative max-w-6xl mx-auto px-4 pt-20 pb-24 lg:pt-28 lg:pb-32">
+          <motion.div
+            initial="hidden"
+            animate="show"
+            variants={{ show: { transition: { staggerChildren: 0.1 } } }}
+            className="max-w-3xl"
+          >
             <motion.div variants={fadeUp}>
-              <Badge className="mb-4 bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 hover:bg-primary-foreground/20">
-                Enterprise Learning Management System
+              <Badge className="mb-5 bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20 px-3 py-1 text-xs tracking-wide">
+                Enterprise Learning Platform
               </Badge>
             </motion.div>
-            <motion.h1 variants={fadeUp} className="text-4xl sm:text-5xl lg:text-6xl font-bold max-w-3xl leading-tight">
-              One platform for learners, instructors, and organizations
+            <motion.h1
+              variants={fadeUp}
+              className="text-4xl sm:text-5xl lg:text-[3.5rem] font-bold text-primary-foreground leading-[1.1] tracking-tight"
+            >
+              Learning infrastructure
+              <span className="block text-primary-foreground/80">built for every role</span>
             </motion.h1>
-            <motion.p variants={fadeUp} className="mt-5 text-lg text-primary-foreground/85 max-w-2xl">
-              LMS Pro brings courses, AI-powered study tools, exams, assignments, and multi-tenant admin — with dedicated
-              dashboards for every role.
+            <motion.p variants={fadeUp} className="mt-6 text-lg text-primary-foreground/75 leading-relaxed max-w-xl">
+              Premium workspaces for students, instructors, organization leaders, and platform operators — with AI
+              tools and tenant isolation included.
             </motion.p>
-            <motion.div variants={fadeUp} className="mt-8 flex flex-wrap gap-3">
-              <Button size="lg" asChild className="bg-accent hover:bg-accent/90 text-accent-foreground h-12 px-8">
+            <motion.div variants={fadeUp} className="mt-10 flex flex-wrap gap-4">
+              <Button
+                size="lg"
+                asChild
+                className="h-12 px-8 bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg shadow-accent/25 font-semibold"
+              >
                 <Link to="/register">
-                  Start learning free
+                  Start for free
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Link>
               </Button>
@@ -206,219 +91,147 @@ const Landing = () => {
                 size="lg"
                 variant="outline"
                 asChild
-                className="h-12 px-8 border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10 bg-transparent"
+                className="h-12 px-8 border-primary-foreground/25 text-primary-foreground bg-primary-foreground/5 hover:bg-primary-foreground/10 backdrop-blur"
               >
-                <Link to="/login">Sign in to your dashboard</Link>
+                <Link to="/login">Sign in</Link>
               </Button>
             </motion.div>
-            <motion.div variants={fadeUp} className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-2xl">
-              {[
-                { value: "4", label: "Role dashboards" },
-                { value: "AI", label: "Tutor & quizzes" },
-                { value: "Multi", label: "Tenant orgs" },
-                { value: "24/7", label: "Cloud access" },
-              ].map((s) => (
-                <div key={s.label} className="text-center sm:text-left">
-                  <div className="text-2xl font-bold">{s.value}</div>
-                  <div className="text-sm text-primary-foreground/70">{s.label}</div>
-                </div>
-              ))}
-            </motion.div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35, duration: 0.7 }}
+            className="mt-16 lg:mt-20 grid sm:grid-cols-2 lg:grid-cols-4 gap-4"
+          >
+            {premiumFeatures.map((f) => (
+              <div
+                key={f.title}
+                className="rounded-2xl border border-primary-foreground/15 bg-primary-foreground/5 backdrop-blur-md p-5"
+              >
+                <f.icon className="w-5 h-5 text-accent mb-3" />
+                <p className="font-semibold text-primary-foreground text-sm">{f.title}</p>
+                <p className="text-xs text-primary-foreground/60 mt-1">{f.desc}</p>
+              </div>
+            ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="py-20 px-4 max-w-6xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-12"
-        >
-          <h2 className="text-3xl font-bold text-foreground">Everything in one LMS</h2>
-          <p className="text-muted-foreground mt-2 max-w-xl mx-auto">
-            From enrollment to certification — plus AI tools built into the same app you use every day.
-          </p>
-        </motion.div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {features.map((f, i) => (
-            <motion.div
-              key={f.title}
-              initial={{ opacity: 0, y: 12 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.03 }}
-              className="bg-card rounded-xl border border-border p-5 shadow-card hover:shadow-md transition-shadow"
-            >
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
-                <f.icon className="w-5 h-5 text-primary" />
-              </div>
-              <h3 className="font-semibold text-foreground">{f.title}</h3>
-              <p className="text-sm text-muted-foreground mt-1">{f.desc}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* Role dashboards */}
-      <section id="portals" className="py-20 px-4 bg-muted/40">
+      {/* Solutions grid */}
+      <section className="py-24 px-4">
         <div className="max-w-6xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-12"
+            className="text-center mb-14"
           >
-            <h2 className="text-3xl font-bold text-foreground">Dashboards for every role</h2>
-            <p className="text-muted-foreground mt-2 max-w-xl mx-auto">
-              After sign-in, you land on the right workspace — student, instructor, org admin, or platform super admin.
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-accent mb-3">Workspaces</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
+              Four dashboards, one platform
+            </h2>
+            <p className="text-muted-foreground mt-3 max-w-lg mx-auto">
+              Each role gets a purpose-built experience. Explore detailed guides for every workspace.
             </p>
           </motion.div>
+
           <div className="grid md:grid-cols-2 gap-6">
-            {portals.map((p, i) => (
-              <motion.div
-                key={p.role}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.06 }}
-                className="bg-card rounded-xl border border-border p-6 shadow-card"
+            {dashboardSolutions.map((s, i) => {
+              const Icon = s.icon;
+              return (
+                <motion.div
+                  key={s.slug}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.08 }}
+                >
+                  <Link
+                    to={`/solutions/${s.slug}`}
+                    className="group block h-full rounded-2xl border border-border bg-card p-8 shadow-card hover:shadow-elevated hover:border-accent/40 transition-all duration-300"
+                  >
+                    <div className={`inline-flex w-14 h-14 rounded-2xl items-center justify-center mb-5 bg-gradient-to-br ${s.accentClass} border border-border`}>
+                      <Icon className="w-7 h-7 text-primary" />
+                    </div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-accent">{s.tagline}</p>
+                    <h3 className="text-xl font-bold text-foreground mt-1 group-hover:text-primary transition-colors">
+                      {s.role}
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-3 leading-relaxed line-clamp-3">{s.overview}</p>
+                    <span className="inline-flex items-center gap-1 mt-6 text-sm font-medium text-accent group-hover:gap-2 transition-all">
+                      Read full guide
+                      <ArrowRight className="w-4 h-4" />
+                    </span>
+                  </Link>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Trust / premium band */}
+      <section className="py-20 px-4 border-y border-border bg-muted/20">
+        <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent mb-3">Enterprise ready</p>
+            <h2 className="text-3xl font-bold text-foreground tracking-tight">
+              Isolated organizations, centralized control
+            </h2>
+            <p className="text-muted-foreground mt-4 leading-relaxed">
+              Run multiple schools or business units on one LMS. Super admins provision tenants; organization admins
+              manage only their people and courses — with no cross-tenant data exposure.
+            </p>
+            <Button asChild variant="outline" className="mt-6 gap-2">
+              <Link to="/solutions/platform">
+                Platform workspace guide
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { icon: Shield, label: "Platform governance" },
+              { icon: Building2, label: "Per-organization tenants" },
+              { icon: LayoutDashboard, label: "Role-based UI" },
+              { icon: GraduationCap, label: "Learner-first design" },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="rounded-xl border border-border bg-card p-5 text-center shadow-card hover:shadow-md transition-shadow"
               >
-                <div className="flex items-start gap-4">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${p.color}`}>
-                    <p.icon className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-bold text-foreground">{p.role}</h3>
-                    <p className="text-sm text-muted-foreground mt-1">{p.description}</p>
-                    <ul className="mt-4 space-y-1.5">
-                      {p.highlights.map((h) => (
-                        <li key={h} className="flex items-center gap-2 text-sm text-foreground">
-                          <CheckCircle2 className="w-4 h-4 text-accent shrink-0" />
-                          {h}
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="mt-3 text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded inline-block">
-                      {p.path}
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
+                <item.icon className="w-6 h-6 text-accent mx-auto mb-2" />
+                <p className="text-sm font-medium text-foreground">{item.label}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Platform / multi-tenant */}
-      <section id="platform" className="py-20 px-4 max-w-6xl mx-auto">
-        <div className="grid lg:grid-cols-2 gap-10 items-center">
-          <motion.div initial={{ opacity: 0, x: -16 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
-            <Badge variant="secondary" className="mb-3">
-              Multi-tenant
-            </Badge>
-            <h2 className="text-3xl font-bold text-foreground">Built for multiple organizations</h2>
-            <p className="text-muted-foreground mt-3">
-              Super admins create organizations and platform admins. Each org admin only sees their own instructors,
-              students, and courses — powered by tenant isolation on the API.
-            </p>
-            <ul className="mt-6 space-y-3">
-              {[
-                "Super Admin: platform dashboard, organizations, platform admins",
-                "Org Admin: tenant-scoped courses, users, and reports",
-                "Instructors & students belong to one organization",
-              ].map((item) => (
-                <li key={item} className="flex gap-2 text-sm text-foreground">
-                  <Shield className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, x: 16 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            className="bg-card rounded-2xl border border-border p-6 shadow-card space-y-4"
-          >
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground border-b border-border pb-3">
-              <LayoutDashboard className="w-4 h-4" />
-              What you&apos;ll find inside
-            </div>
-            {[
-              { label: "Student dashboard", path: "/dashboard", icon: GraduationCap },
-              { label: "Instructor hub", path: "/instructor", icon: Users },
-              { label: "Organization admin", path: "/admin", icon: Building2 },
-              { label: "Platform super admin", path: "/superadmin", icon: Shield },
-            ].map((row) => (
-              <div key={row.path} className="flex items-center justify-between gap-3 py-1">
-                <div className="flex items-center gap-2">
-                  <row.icon className="w-4 h-4 text-accent" />
-                  <span className="text-sm font-medium text-foreground">{row.label}</span>
-                </div>
-                <code className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{row.path}</code>
-              </div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
-
       {/* CTA */}
-      <section className="py-16 px-4">
+      <section className="py-20 px-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
-          className="max-w-4xl mx-auto rounded-2xl bg-gradient-primary p-10 sm:p-14 text-center text-primary-foreground shadow-elevated"
+          className="max-w-4xl mx-auto text-center"
         >
-          <h2 className="text-2xl sm:text-3xl font-bold">Ready to open your dashboard?</h2>
-          <p className="mt-3 text-primary-foreground/85 max-w-lg mx-auto">
-            Create a student account or sign in with credentials from your school or organization.
+          <h2 className="text-3xl font-bold text-foreground">Start your learning journey</h2>
+          <p className="text-muted-foreground mt-3 max-w-md mx-auto">
+            Join thousands of learners and educators on a platform designed for clarity and scale.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Button size="lg" asChild className="bg-accent hover:bg-accent/90 text-accent-foreground h-11">
+            <Button size="lg" asChild className="bg-accent hover:bg-accent/90 h-11 px-8">
               <Link to="/register">Create account</Link>
             </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              asChild
-              className="h-11 border-primary-foreground/40 text-primary-foreground hover:bg-primary-foreground/10 bg-transparent"
-            >
+            <Button size="lg" variant="outline" asChild className="h-11 px-8">
               <Link to="/login">Sign in</Link>
             </Button>
           </div>
         </motion.div>
       </section>
-
-      {/* Footer */}
-      <footer className="border-t border-border bg-card py-10 px-4">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-              <GraduationCap className="w-4 h-4 text-primary-foreground" />
-            </div>
-            <span className="font-semibold text-foreground">LMS Pro</span>
-          </div>
-          <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
-            <button type="button" onClick={() => scrollTo("features")} className="hover:text-foreground">
-              Features
-            </button>
-            <button type="button" onClick={() => scrollTo("portals")} className="hover:text-foreground">
-              Dashboards
-            </button>
-            <Link to="/login" className="hover:text-foreground">
-              Sign in
-            </Link>
-            <Link to="/register" className="hover:text-foreground">
-              Register
-            </Link>
-          </div>
-          <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} LMS Pro. All rights reserved.</p>
-        </div>
-      </footer>
-    </div>
+    </MarketingLayout>
   );
 };
 
