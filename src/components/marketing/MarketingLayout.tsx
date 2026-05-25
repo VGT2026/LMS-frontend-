@@ -82,8 +82,8 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
             <Link
               to="/solutions/platform"
               className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                location.pathname.startsWith("/solutions")
-                  ? "text-muted-foreground hover:text-foreground"
+                isActive("/solutions/platform")
+                  ? "text-foreground bg-muted"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
