@@ -271,10 +271,18 @@ export const authAPI = {
 
   getProfile: () => apiRequest('/auth/profile'),
 
-  updateProfile: (data: { name?: string; targetJobRoleId?: string | null }) =>
+  updateProfile: (data: {
+    name?: string;
+    targetJobRoleId?: string | null;
+    roadmapCourseIds?: string[] | null;
+  }) =>
     apiRequest('/auth/profile', {
       method: 'POST',
-      body: JSON.stringify({ name: data.name, target_job_role_id: data.targetJobRoleId }),
+      body: JSON.stringify({
+        name: data.name,
+        target_job_role_id: data.targetJobRoleId,
+        roadmap_course_ids: data.roadmapCourseIds,
+      }),
     }),
 
   changePassword: (currentPassword: string, newPassword: string) =>

@@ -24,6 +24,8 @@ export interface User {
   preferredCategories?: string[];
   completedCourseIds?: string[];
   targetJobRoleId?: string;
+  /** Custom career roadmap course order (course IDs from catalog) */
+  roadmapCourseIds?: string[];
   /** Set for admin / instructor / student when backend scopes by organization */
   tenantId?: string;
   tenantName?: string;
@@ -103,6 +105,7 @@ const toUser = (u: any): User => {
     preferredCategories: Array.isArray(u.preferred_categories) ? u.preferred_categories : parseIds(u.preferred_categories),
     completedCourseIds: parseIds(u.completed_course_ids),
     targetJobRoleId: u.target_job_role_id != null ? String(u.target_job_role_id) : undefined,
+    roadmapCourseIds: parseIds(u.roadmap_course_ids),
     tenantId: role === "superadmin" ? undefined : tenant.tenantId,
     tenantName: role === "superadmin" ? undefined : tenant.tenantName,
   };

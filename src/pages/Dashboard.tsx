@@ -75,6 +75,7 @@ const Dashboard = () => {
               preferredCategories: Array.isArray(p.preferred_categories) ? p.preferred_categories : (p.preferred_categories ? parseIds(p.preferred_categories) : undefined),
               completedCourseIds: parseIds(p.completed_course_ids ?? []),
               targetJobRoleId: p.target_job_role_id != null ? String(p.target_job_role_id) : undefined,
+              roadmapCourseIds: parseIds(p.roadmap_course_ids ?? []),
             });
           }
         } catch { /* ignore profile fetch */ }

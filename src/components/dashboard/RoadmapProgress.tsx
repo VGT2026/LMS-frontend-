@@ -4,6 +4,7 @@ import { Target, CheckCircle2, Circle, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { jobRoles, courses } from "@/data/mockData";
 import { User } from "@/contexts/AuthContext";
+import { getEffectiveRoadmapIds } from "@/utils/careerRoadmap";
 import { Progress } from "@/components/ui/progress";
 
 interface RoadmapProgressProps {
@@ -23,7 +24,7 @@ export const RoadmapProgress = ({ user, courses: propCourses }: RoadmapProgressP
         ?? (idMatch === "1" ? jobRoles[0] : idMatch === "2" ? jobRoles[1] : idMatch === "3" ? jobRoles[2] : null);
     if (!jobRole) return null;
 
-    const roadmapCourseIds = jobRole.roadmap || [];
+    const roadmapCourseIds = getEffectiveRoadmapIds(user, jobRole.roadmap || []);
     const completedIds = user.completedCourseIds || [];
     const courseList = Array.isArray(propCourses) && propCourses.length > 0 ? propCourses : courses;
 

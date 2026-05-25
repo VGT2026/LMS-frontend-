@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Target,
@@ -20,11 +20,19 @@ import {
     RefreshCw,
     X,
     Search,
-    Zap
+    Zap,
+    Plus,
+    Trash2,
+    Loader2,
 } from "lucide-react";
 import { jobRoles, courses } from "@/data/mockData";
 import { useAuth } from "@/contexts/AuthContext";
-import { authAPI, aiAPI } from "@/services/api";
+import { authAPI, aiAPI, courseAPI } from "@/services/api";
+import {
+    getEffectiveRoadmapIds,
+    saveRoadmapToStorage,
+    mapCourseToRoadmapItem,
+} from "@/utils/careerRoadmap";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -43,7 +51,7 @@ interface RoadmapCourse {
     title: string;
     description: string;
     duration?: string;
-    thumbnail?: string;
+    category?: string;
 }
 
 const roleImageByTitle: Record<string, string> = {
@@ -64,13 +72,80 @@ const CareerRoadmap = () => {
     const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
     const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null);
 
+    const [allCatalogCourses, setAllCatalogCourses] = useState<
+        Array<{ id: string | number; title?: string; description?: string; duration?: string; category?: string }>
+    >([]);
+    const [catalogLoading, setCatalogLoading] = useState(false);
+    const [catalogSearch, setCatalogSearch] = useState("");
+
+    const persistRoadmap = useCallback(
+        (ids: string[]) => {
+            if (!user) return;
+            updateUser({ roadmapCourseIds: ids });
+            saveRoadmapToStorage(user.id, ids);
+            authAPI.updateProfile({ roadmapCourseIds: ids }).catch((err) => {
+                console.error("Failed to save roadmap:", err);
+                toast({
+                    title: "Saved locally",
+                    description: "Roadmap updated on this device. Server sync failed — backend may need roadmap_course_ids support.",
+                    variant: "destructive",
+                });
+            });
+        },
+        [user, updateUser, toast]
+    );
+
     const selectRole = (roleId: string) => {
-        updateUser({ targetJobRoleId: roleId });
-        authAPI.updateProfile({ targetJobRoleId: roleId }).catch((err) => {
-            console.error('Failed to save career role:', err);
-            toast({ title: 'Save failed', description: 'Could not save your career selection. Please try again.', variant: 'destructive' });
-        });
+        const role = jobRoles.find((r) => r.id === roleId);
+        const defaultIds = role?.roadmap ? [...role.roadmap] : [];
+        updateUser({ targetJobRoleId: roleId, roadmapCourseIds: defaultIds });
+        if (user) saveRoadmapToStorage(user.id, defaultIds);
+        authAPI
+            .updateProfile({ targetJobRoleId: roleId, roadmapCourseIds: defaultIds })
+            .catch((err) => {
+                console.error("Failed to save career role:", err);
+                toast({
+                    title: "Save failed",
+                    description: "Could not save your career selection. Please try again.",
+                    variant: "destructive",
+                });
+            });
     };
+
+    useEffect(() => {
+        if (!user?.targetJobRoleId) return;
+        let cancelled = false;
+        const load = async () => {
+            setCatalogLoading(true);
+            try {
+                const res = await courseAPI.getAllCourses({ limit: 200, include_inactive: true });
+                const list = Array.isArray(res?.data) ? res.data : [];
+                const approved = list.filter(
+                    (c: { approval_status?: string }) => c.approval_status === "approved" || !c.approval_status
+                );
+                if (!cancelled) setAllCatalogCourses(approved);
+            } catch {
+                if (!cancelled) setAllCatalogCourses(courses as typeof allCatalogCourses);
+            } finally {
+                if (!cancelled) setCatalogLoading(false);
+            }
+        };
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.targetJobRoleId]);
+
+    const filteredCatalog = useMemo(() => {
+        const q = catalogSearch.trim().toLowerCase();
+        return allCatalogCourses.filter((c) => {
+            if (!q) return true;
+            const title = (c.title || "").toLowerCase();
+            const desc = (c.description || "").toLowerCase();
+            const cat = (c.category || "").toLowerCase();
+            return title.includes(q) || desc.includes(q) || cat.includes(q);
+        });
+    }, [allCatalogCourses, catalogSearch]);
 
     if (!user || !user.targetJobRoleId) {
         return (
@@ -113,25 +188,29 @@ const CareerRoadmap = () => {
     if (!jobRole) return null;
 
     const completedIds = user.completedCourseIds || [];
-    const roadmapCourses: RoadmapCourse[] = jobRole.roadmap.map(id => {
-        const found = courses.find(c => c.id === id);
-        return found ? {
-            id: found.id,
-            title: found.title,
-            description: found.description,
-            duration: (found as { duration?: string }).duration || "12 weeks",
-            thumbnail: (found as { thumbnail?: string }).thumbnail,
-        } : {
-            id,
-            title: "Specialized Module",
-            description: "Advanced topic specific to your career path.",
-            duration: "10 weeks",
-            thumbnail: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&h=700&fit=crop",
-        };
-    });
+    const roadmapIds = getEffectiveRoadmapIds(user, jobRole.roadmap);
 
-    const completedCount = jobRole.roadmap.filter(id => completedIds.includes(id)).length;
-    const progress = Math.round((completedCount / jobRole.roadmap.length) * 100);
+    const roadmapCourses: RoadmapCourse[] = roadmapIds.map((id) =>
+        mapCourseToRoadmapItem(id, allCatalogCourses, courses)
+    );
+
+    const completedCount = roadmapIds.filter((id) => completedIds.includes(id) || completedIds.includes(String(id))).length;
+    const progress = roadmapIds.length > 0 ? Math.round((completedCount / roadmapIds.length) * 100) : 0;
+
+    const addCourseToRoadmap = (courseId: string | number) => {
+        const sid = String(courseId);
+        if (roadmapIds.includes(sid)) {
+            toast({ title: "Already in your path", description: "This course is already on your roadmap." });
+            return;
+        }
+        persistRoadmap([...roadmapIds, sid]);
+        toast({ title: "Added to roadmap", description: "Course added to your learning sequence." });
+    };
+
+    const removeCourseFromRoadmap = (courseId: string) => {
+        persistRoadmap(roadmapIds.filter((id) => id !== courseId));
+        toast({ title: "Removed from roadmap" });
+    };
 
     const nextMilestone = jobRole.milestones.find(m => completedCount < m.reqCourses) || jobRole.milestones[jobRole.milestones.length - 1];
     const coursesToMilestone = Math.max(0, nextMilestone.reqCourses - completedCount);
@@ -153,7 +232,7 @@ const CareerRoadmap = () => {
         try {
             const nextCourse = roadmapCourses.find(c => !completedIds.includes(c.id));
             const completedNames = roadmapCourses.filter(c => completedIds.includes(c.id)).map(c => c.title).join(', ') || 'none yet';
-            const prompt = `As a career coach, give me one specific, actionable tip (1-2 sentences) for someone pursuing ${jobRole.title} who is ${progress}% through their roadmap (${completedCount} of ${jobRole.roadmap.length} modules done). Completed: ${completedNames}. Next module: ${nextCourse?.title || 'all complete'}. Top skill gap: ${jobRole.skills.slice().sort((a, b) => a.progress - b.progress)[0]?.name}.`;
+            const prompt = `As a career coach, give me one specific, actionable tip (1-2 sentences) for someone pursuing ${jobRole.title} who is ${progress}% through their roadmap (${completedCount} of ${roadmapIds.length} modules done). Completed: ${completedNames}. Next module: ${nextCourse?.title || 'all complete'}. Top skill gap: ${jobRole.skills.slice().sort((a, b) => a.progress - b.progress)[0]?.name}.`;
             const result = await aiAPI.askTutor(prompt);
             const tip = result?.answer || result?.data?.answer || result;
             setAiTip(typeof tip === 'string' ? tip : 'Focus on your next module to maintain momentum on your career path.');
@@ -250,12 +329,12 @@ const CareerRoadmap = () => {
                         </h1>
 
                         <p className="text-xl text-white/60 leading-relaxed max-w-xl">
-                            Master the digital frontier. We've mapped out <span className="text-white font-bold">{jobRole.roadmap.length} critical milestones</span> to transition you into a professional level {jobRole.title}.
+                            Master the digital frontier. You've selected <span className="text-white font-bold">{roadmapIds.length} courses</span> on your path to become a professional {jobRole.title}.
                         </p>
 
                         <div className="flex flex-wrap gap-4 pt-4">
                             {[
-                                { icon: BookOpen, label: "Curriculum", value: `${jobRole.roadmap.length} courses`, color: "text-primary" },
+                                { icon: BookOpen, label: "Curriculum", value: `${roadmapIds.length} courses`, color: "text-primary" },
                                 { icon: TrendingUp, label: "Market Demand", value: jobRole.demand, color: "text-accent" },
                                 { icon: Briefcase, label: "Potential", value: jobRole.salaryRange, color: "text-success" }
                             ].map((stat, i) => (
@@ -322,45 +401,58 @@ const CareerRoadmap = () => {
                                         {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : isNext ? <div className="w-2.5 h-2.5 rounded-full bg-primary animate-ping" /> : <Lock className="w-3 h-3 text-muted-foreground" />}
                                     </div>
 
-                                    <div className={`rounded-[2rem] border transition-all duration-500 overflow-hidden ${isCompleted ? "bg-card/50 border-success/20 opacity-80" : isNext ? "bg-card border-primary shadow-2xl ring-4 ring-primary/5" : "bg-muted/20 border-border"}`}>
-                                        <div className="relative h-36 sm:h-44 border-b border-border/60 overflow-hidden">
-                                            <img
-                                                src={course.thumbnail || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&h=700&fit=crop"}
-                                                alt={course.title}
-                                                className={`w-full h-full object-cover transition-transform duration-500 ${isLocked ? "grayscale opacity-50" : "group-hover:scale-105"}`}
-                                            />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/25 to-transparent" />
-                                            <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between">
-                                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">
-                                                    {String(index + 1).padStart(2, "0")} - Module
-                                                </span>
-                                                {isNext && (
-                                                    <span className="px-2 py-0.5 rounded bg-primary/20 text-white text-[10px] font-black uppercase border border-primary/40">
-                                                        Live Track
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="p-8">
+                                    <div className={`rounded-2xl border transition-all duration-500 ${isCompleted ? "bg-card/50 border-success/20 opacity-90" : isNext ? "bg-card border-primary shadow-xl ring-2 ring-primary/10" : "bg-muted/20 border-border"}`}>
+                                        <div className="p-6 sm:p-8">
                                             <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-                                                <div className="space-y-3">
-                                                    <h3 className={`text-2xl font-bold tracking-tight ${isLocked ? "text-muted-foreground" : "text-foreground"}`}>{course.title}</h3>
-                                                    <p className="text-muted-foreground leading-relaxed max-w-xl">{course.description}</p>
+                                                <div className="flex gap-4 min-w-0 flex-1">
+                                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border ${isCompleted ? "bg-success/10 border-success/30 text-success" : isNext ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted border-border text-muted-foreground"}`}>
+                                                        <BookOpen className="w-6 h-6" />
+                                                    </div>
+                                                    <div className="space-y-2 min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+                                                                Module {String(index + 1).padStart(2, "0")}
+                                                            </span>
+                                                            {isNext && (
+                                                                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase">
+                                                                    Current focus
+                                                                </span>
+                                                            )}
+                                                            {course.category && (
+                                                                <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-medium">
+                                                                    {course.category}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <h3 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLocked ? "text-muted-foreground" : "text-foreground"}`}>{course.title}</h3>
+                                                        <p className="text-muted-foreground text-sm leading-relaxed line-clamp-3">{course.description}</p>
+                                                    </div>
                                                 </div>
-                                                {!isLocked && (
-                                                    <Link to={`/course/${course.id}`} className="shrink-0">
-                                                        <Button variant={isNext ? "default" : "outline"} className={`rounded-xl px-8 h-12 gap-3 font-bold transition-all duration-500 ${isNext ? 'bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30' : ''}`}>
-                                                            {isCompleted ? "Review Lab" : "Enter Module"}
-                                                            <ChevronRight className="w-4 h-4" />
-                                                        </Button>
-                                                    </Link>
-                                                )}
+                                                <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                                                    {!isLocked && (
+                                                        <Link to={`/course/${course.id}`}>
+                                                            <Button variant={isNext ? "default" : "outline"} className={`rounded-xl px-6 h-11 gap-2 font-semibold w-full sm:w-auto ${isNext ? "shadow-md" : ""}`}>
+                                                                {isCompleted ? "Review" : "Open course"}
+                                                                <ChevronRight className="w-4 h-4" />
+                                                            </Button>
+                                                        </Link>
+                                                    )}
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-11 w-11 text-muted-foreground hover:text-destructive"
+                                                        onClick={() => removeCourseFromRoadmap(course.id)}
+                                                        title="Remove from roadmap"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                             {!isLocked && (
-                                                <div className="mt-8 flex flex-wrap gap-6 border-t pt-6 border-border/50">
-                                                    <div className="flex items-center gap-2.5 text-[11px] font-bold text-muted-foreground uppercase tracking-widest"><Clock className="w-4 h-4 text-primary" />{course.duration}</div>
-                                                    <div className="flex items-center gap-2.5 text-[11px] font-bold text-muted-foreground uppercase tracking-widest"><Award className="w-4 h-4 text-accent" />Verified Proof</div>
-                                                    <div className="ml-auto flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted px-3 py-1 rounded-full"><Search className="w-3 h-3" /> Syllabus Attached</div>
+                                                <div className="mt-6 flex flex-wrap gap-4 border-t pt-4 border-border/50 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                                    <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-primary" />{course.duration}</span>
+                                                    <span className="flex items-center gap-2"><Award className="w-4 h-4 text-accent" />Certificate eligible</span>
                                                 </div>
                                             )}
                                         </div>
@@ -368,6 +460,83 @@ const CareerRoadmap = () => {
                                 </motion.div>
                             );
                         })}
+                    </div>
+
+                    {/* All courses catalog — no images */}
+                    <div className="pt-8 border-t border-border space-y-5">
+                        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 px-2">
+                            <div>
+                                <h3 className="text-2xl font-bold text-foreground">Add courses to your path</h3>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    Browse all published courses and add any module to your roadmap sequence.
+                                </p>
+                            </div>
+                            <div className="relative w-full sm:max-w-xs">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                <input
+                                    type="search"
+                                    placeholder="Search courses..."
+                                    value={catalogSearch}
+                                    onChange={(e) => setCatalogSearch(e.target.value)}
+                                    className="w-full h-10 pl-9 pr-3 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                />
+                            </div>
+                        </div>
+
+                        {catalogLoading ? (
+                            <div className="flex justify-center py-12">
+                                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : filteredCatalog.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-8 text-sm">No courses match your search.</p>
+                        ) : (
+                            <div className="grid gap-3 max-h-[480px] overflow-y-auto pr-1 custom-scrollbar">
+                                {filteredCatalog.map((c) => {
+                                    const sid = String(c.id);
+                                    const inRoadmap = roadmapIds.includes(sid);
+                                    return (
+                                        <div
+                                            key={sid}
+                                            className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-xl border bg-card transition-colors ${inRoadmap ? "border-success/40 bg-success/5" : "border-border hover:border-primary/30"}`}
+                                        >
+                                            <div className="flex gap-3 min-w-0 flex-1">
+                                                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                                    <BookOpen className="w-5 h-5 text-primary" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="font-semibold text-foreground truncate">{c.title || "Untitled"}</p>
+                                                    <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{c.description || "No description"}</p>
+                                                    <div className="flex flex-wrap gap-2 mt-2 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                                                        {c.category && <span>{c.category}</span>}
+                                                        {c.duration && <span>· {c.duration}</span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={inRoadmap ? "secondary" : "default"}
+                                                disabled={inRoadmap}
+                                                className="shrink-0 gap-1.5 h-9"
+                                                onClick={() => addCourseToRoadmap(c.id!)}
+                                            >
+                                                {inRoadmap ? (
+                                                    <>
+                                                        <CheckCircle2 className="w-4 h-4" />
+                                                        On roadmap
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Plus className="w-4 h-4" />
+                                                        Add to roadmap
+                                                    </>
+                                                )}
+                                            </Button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -462,8 +631,8 @@ const CareerRoadmap = () => {
                             <div className="grid grid-cols-3 gap-4">
                                 {[
                                     { icon: Sparkles, title: "Path Starter", color: "text-accent", bg: "bg-accent/10", border: "border-accent", condition: completedCount >= 1 },
-                                    { icon: Wand2, title: "Professional", color: "text-primary", bg: "bg-primary/10", border: "border-primary", condition: completedCount >= Math.floor(jobRole.roadmap.length / 2) },
-                                    { icon: Briefcase, title: "Industry Master", color: "text-success", bg: "bg-success/10", border: "border-success", condition: completedCount === jobRole.roadmap.length }
+                                    { icon: Wand2, title: "Professional", color: "text-primary", bg: "bg-primary/10", border: "border-primary", condition: roadmapIds.length > 0 && completedCount >= Math.floor(roadmapIds.length / 2) },
+                                    { icon: Briefcase, title: "Industry Master", color: "text-success", bg: "bg-success/10", border: "border-success", condition: roadmapIds.length > 0 && completedCount === roadmapIds.length }
                                 ].map((badge, i) => (
                                     <div key={i} title={badge.title} className={`aspect-square rounded-2xl flex flex-col items-center justify-center border transition-all duration-500 scale-100 hover:scale-105 cursor-help ${badge.condition ? `${badge.bg} ${badge.border} opacity-100 shadow-md` : 'bg-muted/30 border-dashed border-border opacity-20 grayscale'}`}>
                                         <badge.icon className={`w-10 h-10 ${badge.condition ? badge.color : 'text-muted-foreground'}`} />
