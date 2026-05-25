@@ -1,51 +1,82 @@
 import { ReactNode, useState } from "react";
+
 import { Link, useLocation } from "react-router-dom";
+
 import { motion, AnimatePresence } from "framer-motion";
+
 import { GraduationCap, Menu, X, ChevronDown } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
+
 import { dashboardSolutions } from "@/data/marketingContent";
 
 const solutionLinks = dashboardSolutions.map((s) => ({
   label: s.role,
+
   href: `/solutions/${s.slug}`,
+
+  tagline: s.tagline,
+
+  Icon: s.icon,
 }));
+
+const navLinkClass = (active: boolean) =>
+  active
+    ? "text-foreground bg-muted/80 shadow-sm"
+    : "text-muted-foreground hover:text-foreground hover:bg-muted/50";
 
 export function MarketingLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+
   const [solutionsOpen, setSolutionsOpen] = useState(false);
+
   const location = useLocation();
 
   const isActive = (path: string) => location.pathname === path;
 
+  const isSolutionsSection = location.pathname.startsWith("/solutions");
+
   return (
-    <div className="min-h-screen bg-background relative">
+    <div className="min-h-screen bg-background relative overflow-x-hidden">
       <div
-        className="pointer-events-none fixed inset-0 opacity-[0.35]"
+        className="pointer-events-none fixed inset-0 opacity-[0.4]"
         aria-hidden
         style={{
           backgroundImage: `radial-gradient(circle at 1px 1px, hsl(var(--border)) 1px, transparent 0)`,
-          backgroundSize: "32px 32px",
+
+          backgroundSize: "28px 28px",
         }}
       />
 
-      <header className="sticky top-0 z-50 border-b border-border/60 bg-card/70 backdrop-blur-xl">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div
+        className="pointer-events-none fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] opacity-[0.07]"
+        aria-hidden
+        style={{
+          background:
+            "radial-gradient(ellipse, hsl(var(--accent)) 0%, transparent 70%)",
+        }}
+      />
+
+      <header className="sticky top-0 z-50 border-b border-border/50 bg-card/80 backdrop-blur-xl supports-[backdrop-filter]:bg-card/60">
+        <div className="max-w-6xl mx-auto px-4 h-[4.25rem] flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+            <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-md ring-1 ring-primary/20 group-hover:scale-105 transition-transform">
               <GraduationCap className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="text-lg font-bold tracking-tight text-foreground">LMS Pro</span>
+
+            <span className="text-lg font-bold tracking-tight text-foreground">
+              LMS Pro
+            </span>
           </Link>
 
-          <nav className="hidden lg:flex items-center gap-1">
+          <nav className="hidden lg:flex items-center gap-0.5 p-1 rounded-xl bg-muted/40 border border-border/60">
             <Link
               to="/"
-              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                isActive("/") ? "text-foreground bg-muted" : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`px-3.5 py-2 text-sm font-medium rounded-lg transition-all ${navLinkClass(isActive("/"))}`}
             >
               Home
             </Link>
+
             <div
               className="relative"
               onMouseEnter={() => setSolutionsOpen(true)}
@@ -53,70 +84,96 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
             >
               <button
                 type="button"
-                className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-lg"
+                className={`flex items-center gap-1 px-3.5 py-2 text-sm font-medium rounded-lg transition-all ${navLinkClass(isSolutionsSection)}`}
               >
                 Solutions
-                <ChevronDown className={`w-4 h-4 transition-transform ${solutionsOpen ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform duration-200 ${solutionsOpen ? "rotate-180" : ""}`}
+                />
               </button>
+
               <AnimatePresence>
                 {solutionsOpen && (
                   <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    className="absolute top-full left-0 mt-1 w-64 rounded-xl border border-border bg-card/95 backdrop-blur-xl shadow-elevated p-2"
+                    initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute top-full left-0 mt-2 w-72 rounded-2xl border border-border bg-card/98 backdrop-blur-xl shadow-elevated p-2 overflow-hidden"
                   >
+                    <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Workspaces
+                    </p>
+
                     {solutionLinks.map((link) => (
                       <Link
                         key={link.href}
                         to={link.href}
-                        className="block px-3 py-2.5 text-sm rounded-lg hover:bg-muted text-foreground"
+                        className="flex items-start gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/80 transition-colors group"
                       >
-                        {link.label}
+                        <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 group-hover:bg-accent/20 transition-colors">
+                          <link.Icon className="w-4 h-4 text-accent" />
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {link.label}
+                          </p>
+
+                          <p className="text-xs text-muted-foreground line-clamp-1">
+                            {link.tagline}
+                          </p>
+                        </div>
                       </Link>
                     ))}
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
+
             <Link
               to="/solutions/platform"
-              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                isActive("/solutions/platform")
-                  ? "text-foreground bg-muted"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`px-3.5 py-2 text-sm font-medium rounded-lg transition-all ${navLinkClass(isActive("/solutions/platform"))}`}
             >
               Enterprise
             </Link>
+
             <Link
               to="/contact"
-              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                isActive("/contact")
-                  ? "text-foreground bg-muted"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`px-3.5 py-2 text-sm font-medium rounded-lg transition-all ${navLinkClass(isActive("/contact"))}`}
             >
               Contact
             </Link>
           </nav>
 
           <div className="hidden md:flex items-center gap-2">
-            <Button variant="ghost" asChild className="font-medium">
+            <Button
+              variant="ghost"
+              asChild
+              className="font-medium text-muted-foreground hover:text-foreground"
+            >
               <Link to="/login">Sign in</Link>
             </Button>
-            <Button asChild className="bg-accent hover:bg-accent/90 shadow-md font-medium">
+
+            <Button
+              asChild
+              className="bg-accent hover:bg-accent/90 shadow-md shadow-accent/20 font-semibold px-5"
+            >
               <Link to="/register">Get started</Link>
             </Button>
           </div>
 
           <button
             type="button"
-            className="lg:hidden p-2 text-muted-foreground"
+            className="lg:hidden p-2.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
             onClick={() => setMobileOpen((o) => !o)}
             aria-label="Menu"
           >
-            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {mobileOpen ? (
+              <X className="w-5 h-5" />
+            ) : (
+              <Menu className="w-5 h-5" />
+            )}
           </button>
         </div>
 
@@ -126,37 +183,55 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="lg:hidden border-t border-border bg-card px-4 py-4 space-y-1"
+              className="lg:hidden border-t border-border bg-card/95 backdrop-blur-xl px-4 py-4 space-y-1"
             >
-              <Link to="/" className="block py-2 text-sm font-medium" onClick={() => setMobileOpen(false)}>
+              <Link
+                to="/"
+                className="block py-2.5 text-sm font-medium rounded-lg px-2 hover:bg-muted"
+                onClick={() => setMobileOpen(false)}
+              >
                 Home
               </Link>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2 pb-1">
+
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pt-3 pb-1 px-2">
                 Solutions
               </p>
+
               {solutionLinks.map((link) => (
                 <Link
                   key={link.href}
                   to={link.href}
-                  className="block py-2 pl-2 text-sm text-muted-foreground"
+                  className="flex items-center gap-2 py-2.5 pl-2 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted/50"
                   onClick={() => setMobileOpen(false)}
                 >
+                  <link.Icon className="w-4 h-4 text-accent shrink-0" />
+
                   {link.label}
                 </Link>
               ))}
+
               <Link
                 to="/contact"
-                className="block py-2 text-sm font-medium"
+                className="block py-2.5 text-sm font-medium rounded-lg px-2 hover:bg-muted"
                 onClick={() => setMobileOpen(false)}
               >
                 Contact
               </Link>
-              <div className="flex flex-col gap-2 pt-4">
+
+              <div className="flex flex-col gap-2 pt-4 border-t border-border mt-2">
                 <Button variant="outline" asChild className="w-full">
-                  <Link to="/login">Sign in</Link>
+                  <Link to="/login" onClick={() => setMobileOpen(false)}>
+                    Sign in
+                  </Link>
                 </Button>
-                <Button asChild className="w-full bg-accent hover:bg-accent/90">
-                  <Link to="/register">Get started</Link>
+
+                <Button
+                  asChild
+                  className="w-full bg-accent hover:bg-accent/90 font-semibold"
+                >
+                  <Link to="/register" onClick={() => setMobileOpen(false)}>
+                    Get started
+                  </Link>
                 </Button>
               </div>
             </motion.div>
@@ -166,71 +241,118 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
 
       <main className="relative">{children}</main>
 
-      <footer className="relative border-t border-border bg-card/80 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 py-14">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-                  <GraduationCap className="w-4 h-4 text-primary-foreground" />
+      <footer className="relative mt-auto border-t border-border">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-muted/30 pointer-events-none" />
+
+        <div className="relative max-w-6xl mx-auto px-4 py-16">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-12">
+            <div className="sm:col-span-2 lg:col-span-1">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-md">
+                  <GraduationCap className="w-5 h-5 text-primary-foreground" />
                 </div>
-                <span className="font-bold text-foreground">LMS Pro</span>
+
+                <span className="font-bold text-lg text-foreground">
+                  LMS Pro
+                </span>
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Enterprise learning with AI, multi-tenant organizations, and role-based workspaces.
+
+              <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
+                Enterprise learning with AI, multi-tenant organizations, and
+                role-based workspaces.
               </p>
             </div>
+
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-foreground mb-3">Solutions</p>
-              <ul className="space-y-2 text-sm text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wider text-foreground mb-4">
+                Solutions
+              </p>
+
+              <ul className="space-y-2.5 text-sm text-muted-foreground">
                 {solutionLinks.map((l) => (
                   <li key={l.href}>
-                    <Link to={l.href} className="hover:text-accent transition-colors">
+                    <Link
+                      to={l.href}
+                      className="hover:text-accent transition-colors inline-flex items-center gap-2"
+                    >
+                      <l.Icon className="w-3.5 h-3.5 opacity-70" />
+
                       {l.label}
                     </Link>
                   </li>
                 ))}
               </ul>
             </div>
+
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-foreground mb-3">Product</p>
-              <ul className="space-y-2 text-sm text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wider text-foreground mb-4">
+                Product
+              </p>
+
+              <ul className="space-y-2.5 text-sm text-muted-foreground">
                 <li>
                   <Link to="/" className="hover:text-accent transition-colors">
                     Features overview
                   </Link>
                 </li>
+
                 <li>
-                  <Link to="/solutions/platform" className="hover:text-accent transition-colors">
+                  <Link
+                    to="/solutions/platform"
+                    className="hover:text-accent transition-colors"
+                  >
                     Multi-tenant platform
                   </Link>
                 </li>
+
                 <li>
-                  <Link to="/contact" className="hover:text-accent transition-colors">
+                  <Link
+                    to="/contact"
+                    className="hover:text-accent transition-colors"
+                  >
                     Contact us
                   </Link>
                 </li>
               </ul>
             </div>
+
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-foreground mb-3">Account</p>
-              <ul className="space-y-2 text-sm text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wider text-foreground mb-4">
+                Account
+              </p>
+
+              <ul className="space-y-2.5 text-sm text-muted-foreground">
                 <li>
-                  <Link to="/login" className="hover:text-accent transition-colors">
+                  <Link
+                    to="/login"
+                    className="hover:text-accent transition-colors"
+                  >
                     Sign in
                   </Link>
                 </li>
+
                 <li>
-                  <Link to="/register" className="hover:text-accent transition-colors">
+                  <Link
+                    to="/register"
+                    className="hover:text-accent transition-colors"
+                  >
                     Create account
                   </Link>
                 </li>
               </ul>
             </div>
           </div>
-          <p className="mt-10 pt-6 border-t border-border text-center text-xs text-muted-foreground">
-            © {new Date().getFullYear()} LMS Pro. All rights reserved.
-          </p>
+
+          <div className="mt-12 pt-8 border-t border-border/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
+            <p>© {new Date().getFullYear()} LMS Pro. All rights reserved.</p>
+
+            <Link
+              to="/contact"
+              className="hover:text-accent transition-colors font-medium"
+            >
+              Get in touch →
+            </Link>
+          </div>
         </div>
       </footer>
     </div>
