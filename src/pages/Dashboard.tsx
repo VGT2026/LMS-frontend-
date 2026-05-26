@@ -392,7 +392,7 @@ const Dashboard = () => {
         {/* Right Column */}
         <motion.div variants={fadeUp} className="space-y-6">
           {/* Roadmap Progress */}
-          <RoadmapProgress user={user} courses={allCourses} />
+          <RoadmapProgress user={user} />
 
           {/* Upcoming Assignments */}
           <div className="bg-card rounded-xl p-5 border border-border shadow-card">

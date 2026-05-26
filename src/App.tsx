@@ -15,6 +15,7 @@ import Dashboard from "./pages/Dashboard";
 import Courses from "./pages/Courses";
 import CourseDetail from "./pages/CourseDetail";
 import CareerRoadmap from "./pages/CareerRoadmap";
+import CareerRoadmapAIHelp from "./pages/CareerRoadmapAIHelp";
 import Quiz from "./pages/Quiz";
 import ExamSession from "./pages/ExamSession";
 import Assignments from "./pages/Assignments";
@@ -114,6 +115,7 @@ const AppRoutes = () => {
       <Route path="/courses" element={<ProtectedRoute><Courses /></ProtectedRoute>} />
       <Route path="/course/:id" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
       <Route path="/roadmap" element={<ProtectedRoute><CareerRoadmap /></ProtectedRoute>} />
+      <Route path="/roadmap/ai-help" element={<ProtectedRoute><CareerRoadmapAIHelp /></ProtectedRoute>} />
       <Route path="/quiz" element={<ProtectedRoute><Quiz /></ProtectedRoute>} />
       <Route path="/exam/:quizId" element={<ProtectedRoute><ExamSession /></ProtectedRoute>} />
       <Route path="/assignments" element={<ProtectedRoute><Assignments /></ProtectedRoute>} />

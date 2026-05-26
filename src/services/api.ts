@@ -1177,6 +1177,13 @@ export const aiAPI = {
       return { ...data, summaryId };
     }),
 
+  /** Career roadmap: recommend study order from user-selected course IDs */
+  recommendCareerPath: (courseIds: number[]) =>
+    apiRequest("/ai/roadmap/recommend", {
+      method: "POST",
+      body: JSON.stringify({ courseIds }),
+    }).then((res) => res?.data ?? res),
+
   /**
    * Ask AI Tutor a question
    * @param question The question to ask
