@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { authAPI, normalizeUsersList } from "@/services/api";
+import { getDisplayTenantName } from "@/utils/tenant";
 import { Users, UserCheck, UserX, Search, Shield, GraduationCap, BookOpen, UserPlus } from "lucide-react";
 
 const roleIcons: Record<string, typeof Shield> = { admin: Shield, instructor: GraduationCap, student: BookOpen };
@@ -214,8 +215,8 @@ const AdminUsersPage = () => {
             <div>
                 <h1 className="text-2xl font-bold text-foreground">Manage Users</h1>
                 <p className="text-muted-foreground mt-1">
-                  {user?.tenantName
-                    ? `${usersData.length} users in ${user.tenantName}`
+                  {getDisplayTenantName(user?.tenantName)
+                    ? `${usersData.length} users in ${getDisplayTenantName(user?.tenantName)}`
                     : `${usersData.length} registered users in your organization`}
                 </p>
             </div>

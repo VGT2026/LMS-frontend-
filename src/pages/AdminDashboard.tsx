@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { courseAPI, dashboardAPI, normalizeCoursesList, supportAPI } from "@/services/api";
+import { getDisplayTenantName } from "@/utils/tenant";
 
 const fadeUp = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
@@ -40,6 +41,7 @@ const chartPlaceholder = [
 
 const AdminDashboard = () => {
   const { user } = useAuth();
+  const orgName = getDisplayTenantName(user?.tenantName);
   const [stats, setStats] = useState<{ totalUsers: number; activeUsers: number; totalCourses: number; activeCourses: number } | null>(null);
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [tickets, setTickets] = useState<SupportTicketRow[]>([]);
@@ -113,8 +115,8 @@ const AdminDashboard = () => {
       <motion.div variants={fadeUp}>
         <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
         <p className="text-muted-foreground mt-1">
-          {user?.tenantName
-            ? `Overview for ${user.tenantName} — users and courses in your organization only.`
+          {orgName
+            ? `Overview for ${orgName} — users and courses in your organization only.`
             : "Organization overview and management (scoped by your account)."}
         </p>
       </motion.div>

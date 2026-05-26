@@ -18,7 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { authAPI, formatApiErrorMessage, normalizeUsersList, readHttpStatus } from "@/services/api";
 import type { PlatformAdminRecord } from "@/data/superAdminData";
-import { parseTenantFromApiUser } from "@/utils/tenant";
+import { formatTenantLabel, parseTenantFromApiUser } from "@/utils/tenant";
 import { Shield, UserPlus, Search, ArrowLeft } from "lucide-react";
 
 function formatCreatedAt(iso: string) {
@@ -355,7 +355,7 @@ const SuperAdminAdmins = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-sm text-foreground">{a.tenantName ?? "—"}</td>
+                    <td className="px-5 py-3 text-sm text-foreground">{formatTenantLabel(a.tenantName)}</td>
                     <td className="px-5 py-3 text-sm text-muted-foreground">{formatCreatedAt(a.createdAt)}</td>
                     <td className="px-5 py-3">
                       <span

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { authAPI, courseAPI, normalizeCoursesList } from "@/services/api";
+import { getDisplayTenantName } from "@/utils/tenant";
 import { BookOpen, Search, Users, TrendingUp, ToggleLeft, ToggleRight, UserCheck, Settings, Pencil, PlusCircle, XCircle } from "lucide-react";
 
 interface Instructor {
@@ -237,8 +238,8 @@ const AdminCoursesPage = () => {
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Manage Courses</h1>
                     <p className="text-muted-foreground mt-1">
-                      {user?.tenantName
-                        ? `${coursesData.length} courses in ${user.tenantName}`
+                      {getDisplayTenantName(user?.tenantName)
+                        ? `${coursesData.length} courses in ${getDisplayTenantName(user?.tenantName)}`
                         : `${coursesData.length} courses in your organization`}
                     </p>
                 </div>

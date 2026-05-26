@@ -1,6 +1,7 @@
 import { ReactNode, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { getDisplayTenantName } from "@/utils/tenant";
 import {
   LayoutDashboard, BookOpen, Calendar, MessageSquare, Award, BarChart3,
   Settings, HelpCircle, GraduationCap, Bell, Search, ChevronDown, ChevronRight,
@@ -130,6 +131,7 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
           ? instructorNav
           : studentNav;
   const isStudent = user?.role === "student";
+  const organizationLabel = getDisplayTenantName(user?.tenantName);
 
   const notificationItems = useMemo(() => {
     if (!user) return [];
@@ -351,10 +353,10 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
           </div>
 
           <div className="flex items-center gap-2">
-            {user?.tenantName && user.role !== "superadmin" && (
+            {organizationLabel && user?.role !== "superadmin" && (
               <Badge variant="secondary" className="hidden md:inline-flex gap-1 font-normal max-w-[200px] truncate">
                 <Building2 className="w-3.5 h-3.5 shrink-0" />
-                {user.tenantName}
+                {organizationLabel}
               </Badge>
             )}
             {/* Notifications */}

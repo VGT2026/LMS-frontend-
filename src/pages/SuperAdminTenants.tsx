@@ -16,12 +16,15 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { authAPI, formatApiErrorMessage, normalizeTenantsList, readHttpStatus } from "@/services/api";
 import type { TenantRecord } from "@/data/superAdminData";
+import { getDisplayTenantName } from "@/utils/tenant";
 import { ArrowLeft, Building2, Plus } from "lucide-react";
 
 function mapTenant(row: Record<string, unknown>): TenantRecord {
+  const raw = String(row.name ?? "").trim();
+  const display = getDisplayTenantName(raw);
   return {
     id: String(row.id ?? ""),
-    name: String(row.name ?? "Organization"),
+    name: display ?? (raw || "Unnamed organization"),
     isActive: row.is_active !== false && row.is_active !== 0,
     createdAt: row.created_at != null ? String(row.created_at) : undefined,
   };

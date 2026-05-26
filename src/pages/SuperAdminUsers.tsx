@@ -16,7 +16,7 @@ import {
   readHttpStatus,
 } from "@/services/api";
 import type { TenantRecord } from "@/data/superAdminData";
-import { parseTenantFromApiUser } from "@/utils/tenant";
+import { formatTenantLabel, parseTenantFromApiUser } from "@/utils/tenant";
 import {
   Select,
   SelectContent,
@@ -111,7 +111,7 @@ function UsersTable({
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-sm text-muted-foreground">{u.tenantName ?? "—"}</td>
+                  <td className="px-5 py-3 text-sm text-muted-foreground">{formatTenantLabel(u.tenantName)}</td>
                   <td className="px-5 py-3 text-sm text-foreground">{u.enrolled} course{u.enrolled === 1 ? "" : "s"}</td>
                   <td className="px-5 py-3 text-sm text-muted-foreground">{formatCreatedAt(u.createdAt)}</td>
                   <td className="px-5 py-3">
