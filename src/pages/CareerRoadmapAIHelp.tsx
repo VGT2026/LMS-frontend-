@@ -16,9 +16,10 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
   buildLocalRecommendation,
+  buildStudyPlanSummary,
   mapApiToCourse,
   parseCourseIdsParam,
-  parseRecommendApiResponse,
+  rankSelectedCourses,
   type RoadmapCourseItem,
   type RoadmapRecommendation,
 } from "@/utils/roadmapAi";
@@ -41,7 +42,7 @@ const CareerRoadmapAIHelp = () => {
   const [recommendation, setRecommendation] = useState<RoadmapRecommendation | null>(null);
 
   const selectedCourses = useMemo(() => {
-    const byId = new Map(catalog.map((c) => [c.id, c]));
+    const byId = new Map(catalog.map((c) => [String(c.id), c] as const));
     return requestedIds.map((id) => byId.get(id)).filter((c): c is RoadmapCourseItem => !!c);
   }, [catalog, requestedIds]);
 
@@ -56,11 +57,15 @@ const CareerRoadmapAIHelp = () => {
     const run = async () => {
       setLoading(true);
       try {
-        const res = await courseAPI.getAllCourses({ limit: 200, include_inactive: true });
+        const res = await courseAPI.getAllCourses({ limit: 100, include_inactive: true });
         const list = Array.isArray(res?.data) ? res.data : [];
-        const mapped = list
+        const approved = list.filter(
+          (c: any) => c?.approval_status === "approved" || !c?.approval_status
+        );
+        const mapped = approved
           .map((row: Record<string, unknown>) => mapApiToCourse(row))
           .filter((c): c is RoadmapCourseItem => c != null);
+
         if (!cancelled) setCatalog(mapped);
       } catch {
         if (!cancelled) {
@@ -82,50 +87,114 @@ const CareerRoadmapAIHelp = () => {
   }, [toast]);
 
   useEffect(() => {
-    if (loading || selectedCourses.length === 0) return;
+    if (loading) return;
+    if (requestedIds.length === 0) return;
+    if (selectedCourses.length === 0) return;
 
     if (selectedCourses.length !== requestedIds.length) {
       toast({
         title: "Some courses unavailable",
-        description: "Removed courses that are no longer published from your selection.",
+        description: "Removed courses are no longer published or no longer exist in your catalog.",
       });
     }
 
     let cancelled = false;
-    const fetchRecommendation = async () => {
+    const run = async () => {
       setAiLoading(true);
       setUsedFallback(false);
       try {
-        const data = await aiAPI.recommendCareerPath(selectedCourses.map((c) => c.id));
-        const parsed = parseRecommendApiResponse(data, selectedCourses);
-        if (parsed && !cancelled) {
-          setRecommendation(parsed);
-          return;
-        }
-        throw new Error("Invalid recommend response");
+        const payload = await aiAPI.recommendRoadmap(selectedCourses.map((c) => c.id));
+
+        if (cancelled) return;
+
+        const byId = new Map(selectedCourses.map((c) => [String(c.id), c] as const));
+
+        const answerText =
+          typeof (payload as any)?.answer === "string"
+            ? (payload as any).answer
+            : typeof (payload as any)?.aiAnswer === "string"
+              ? (payload as any).aiAnswer
+              : "";
+
+        const recommendedCourseId =
+          (payload as any)?.recommendedCourseId ??
+          (payload as any)?.recommended_course_id ??
+          (payload as any)?.topPickCourseId ??
+          (payload as any)?.top_pick_course_id;
+
+        const topPick =
+          byId.get(String(recommendedCourseId)) ?? selectedCourses[0];
+
+        const rankedIdsRaw =
+          (payload as any)?.ranked ??
+          (payload as any)?.rankedCourseIds ??
+          (payload as any)?.rankings ??
+          [];
+
+        const rankedIds = Array.isArray(rankedIdsRaw) ? rankedIdsRaw : [];
+        const ranked = rankedIds
+          .map((id: unknown) => byId.get(String(id)))
+          .filter((c): c is RoadmapCourseItem => !!c);
+
+        const studyOrderIdsRaw = (payload as any)?.studyOrder ?? (payload as any)?.study_order ?? [];
+        const studyOrderIds = Array.isArray(studyOrderIdsRaw) ? studyOrderIdsRaw : [];
+        const studyOrderCourses = studyOrderIds
+          .map((id: unknown) => byId.get(String(id)))
+          .filter((c): c is RoadmapCourseItem => !!c);
+
+        const rankedToShow =
+          ranked.length > 0 ? ranked : studyOrderCourses.length > 0 ? studyOrderCourses : rankSelectedCourses(selectedCourses);
+
+        const summary = answerText || buildStudyPlanSummary(selectedCourses, topPick);
+
+        setRecommendation({
+          topPick,
+          ranked: rankedToShow,
+          studyOrder: studyOrderCourses.map((c) => c.id),
+          summary,
+        });
       } catch {
-        if (!cancelled) {
-          setUsedFallback(true);
-          setRecommendation(buildLocalRecommendation(selectedCourses));
-          toast({
-            title: "Using offline ranking",
-            description:
-              "AI recommend API is not available yet. Showing a local study order from your selected courses.",
-          });
-        }
+        if (cancelled) return;
+        setUsedFallback(true);
+        setRecommendation(buildLocalRecommendation(selectedCourses));
+        toast({
+          title: "Using offline ranking",
+          description: "POST /ai/roadmap/recommend failed. Showing a local study order from your selected courses.",
+        });
       } finally {
         if (!cancelled) setAiLoading(false);
       }
     };
 
-    void fetchRecommendation();
+    void run();
     return () => {
       cancelled = true;
     };
-  }, [loading, selectedCourses, requestedIds.length, toast]);
+  }, [loading, requestedIds.length, selectedCourses, toast]);
 
-  if (requestedIds.length === 0) {
-    return null;
+  if (requestedIds.length === 0) return null;
+
+  if (!loading && requestedIds.length > 0 && selectedCourses.length === 0) {
+    return (
+      <div className="max-w-3xl mx-auto pb-12">
+        <Button variant="ghost" asChild className="mb-6 gap-2 -ml-2">
+          <Link to="/roadmap">
+            <ArrowLeft className="w-4 h-4" />
+            Back to course selection
+          </Link>
+        </Button>
+
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-8 text-center">
+          <p className="text-foreground font-medium">Selected courses not found</p>
+          <p className="text-muted-foreground mt-2 text-sm">
+            Some or all selected course IDs are no longer available in the catalog.
+          </p>
+          <Button asChild className="mt-4" variant="outline">
+            <Link to="/roadmap">Go back to /roadmap</Link>
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -146,7 +215,7 @@ const CareerRoadmapAIHelp = () => {
         <h1 className="text-3xl font-bold text-foreground tracking-tight">Your study plan</h1>
         <p className="text-muted-foreground mt-2">
           Based on {selectedCourses.length} course{selectedCourses.length === 1 ? "" : "s"} you selected
-          {usedFallback ? " (local ranking — connect POST /api/ai/roadmap/recommend for live AI)" : ""}.
+          {usedFallback ? " (offline ranking)" : ""}.
         </p>
       </motion.div>
 

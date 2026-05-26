@@ -1184,6 +1184,13 @@ export const aiAPI = {
       body: JSON.stringify({ courseIds }),
     }).then((res) => res?.data ?? res),
 
+  /** Roadmap: recommend study order from selected course IDs */
+  recommendRoadmap: (courseIds: number[]) =>
+    apiRequest("/ai/roadmap/recommend", {
+      method: "POST",
+      body: JSON.stringify({ courseIds }),
+    }).then((res) => res?.data ?? res),
+
   /**
    * Ask AI Tutor a question
    * @param question The question to ask

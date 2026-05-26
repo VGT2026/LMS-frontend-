@@ -31,14 +31,15 @@ export function mapApiToCourse(raw: Record<string, unknown>): RoadmapCourseItem 
   };
 }
 
-export function parseCourseIdsParam(param: string | null): number[] {
+export function parseCourseIdsParam(param: string | null): string[] {
   if (!param?.trim()) return [];
   return [
     ...new Set(
       param
         .split(",")
-        .map((s) => Number(s.trim()))
-        .filter((n) => Number.isFinite(n) && n > 0)
+        .map((s) => s.trim())
+        .map((s) => (Number.isFinite(Number(s)) ? String(Number(s)) : ""))
+        .filter((s) => !!s && Number(s) > 0)
     ),
   ];
 }
@@ -166,19 +167,22 @@ export function parseRecommendApiResponse(
 
 export const ROADMAP_SELECTION_STORAGE_KEY = "lms_roadmap_selected";
 
-export function loadStoredSelection(): number[] {
+export function loadStoredSelection(): string[] {
   try {
     const raw = sessionStorage.getItem(ROADMAP_SELECTION_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+    return parsed.map(String).filter((s) => {
+      const n = Number(s);
+      return Number.isFinite(n) && n > 0;
+    });
   } catch {
     return [];
   }
 }
 
-export function saveStoredSelection(ids: number[]) {
+export function saveStoredSelection(ids: string[]) {
   try {
     sessionStorage.setItem(ROADMAP_SELECTION_STORAGE_KEY, JSON.stringify(ids));
   } catch {

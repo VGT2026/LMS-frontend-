@@ -39,17 +39,16 @@ const CareerRoadmap = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set(loadStoredSelection()));
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(loadStoredSelection()));
 
   const loadCourses = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await courseAPI.getAllCourses({ limit: 200, include_inactive: true });
+      const res = await courseAPI.getAllCourses({ limit: 100, include_inactive: true });
       const list = Array.isArray(res?.data) ? res.data : [];
       const approved = list.filter(
-        (c: { approval_status?: string; is_active?: boolean }) =>
-          (c.approval_status === "approved" || !c.approval_status) && c.is_active !== false
+        (c: { approval_status?: string }) => c.approval_status === "approved" || !c.approval_status
       );
       const mapped = approved
         .map((row: Record<string, unknown>) => mapApiToCourse(row))
@@ -57,15 +56,15 @@ const CareerRoadmap = () => {
       setCourses(mapped);
 
       setSelectedIds((prev) => {
-        const valid = new Set(mapped.map((c) => c.id));
-        const next = new Set<number>();
+        const valid = new Set(mapped.map((c) => String(c.id)));
+        const next = new Set<string>();
         for (const id of prev) {
           if (valid.has(id)) next.add(id);
         }
         return next;
       });
     } catch {
-      setLoadError("Could not load courses from the server. Please try again later.");
+      setLoadError("No courses available");
       setCourses([]);
     } finally {
       setLoading(false);
@@ -99,7 +98,7 @@ const CareerRoadmap = () => {
     });
   }, [courses, search, category]);
 
-  const toggleCourse = (id: number) => {
+  const toggleCourse = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -117,7 +116,9 @@ const CareerRoadmap = () => {
       });
       return;
     }
-    const ids = [...selectedIds].sort((a, b) => a - b).join(",");
+    const ids = [...selectedIds]
+      .sort((a, b) => Number(a) - Number(b))
+      .join(",");
     navigate(`/roadmap/ai-help?courses=${ids}`);
   };
 
@@ -186,11 +187,14 @@ const CareerRoadmap = () => {
           </Button>
         </div>
       ) : filtered.length === 0 ? (
-        <p className="text-center text-muted-foreground py-16">No courses match your filters.</p>
+        <p className="text-center text-muted-foreground py-16">
+          {courses.length === 0 ? "No courses available" : "No courses match your filters."}
+        </p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((course, i) => {
-            const checked = selectedIds.has(course.id);
+            const checked = selectedIds.has(String(course.id));
+            const courseId = String(course.id);
             return (
               <motion.div
                 key={course.id}
@@ -212,7 +216,7 @@ const CareerRoadmap = () => {
                     <div className="absolute top-3 left-3 flex items-center gap-2 rounded-lg bg-card/95 backdrop-blur px-2 py-1.5 border border-border shadow-sm">
                       <Checkbox
                         checked={checked}
-                        onCheckedChange={() => toggleCourse(course.id)}
+                        onCheckedChange={() => toggleCourse(courseId)}
                         aria-label={`Select ${course.title}`}
                       />
                       <span className="text-xs font-medium text-foreground">Select</span>
