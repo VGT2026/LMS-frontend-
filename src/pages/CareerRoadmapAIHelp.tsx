@@ -8,7 +8,6 @@ import {
   BookOpen,
   ChevronRight,
   Trophy,
-  ListOrdered,
   ExternalLink,
 } from "lucide-react";
 import { aiAPI, courseAPI } from "@/services/api";
@@ -45,6 +44,14 @@ const CareerRoadmapAIHelp = () => {
     const byId = new Map(catalog.map((c) => [String(c.id), c] as const));
     return requestedIds.map((id) => byId.get(id)).filter((c): c is RoadmapCourseItem => !!c);
   }, [catalog, requestedIds]);
+
+  const getLocalWhy = (course: RoadmapCourseItem, isTopPick: boolean) => {
+    if (isTopPick) return "Best starting point: strong foundation and broad relevance to your selection.";
+    const cat = course.category ? `focused on ${course.category}` : "building on your selection";
+    const len = course.description?.length ?? 0;
+    const depth = len > 140 ? "deeper" : len > 60 ? "balanced" : "quick wins";
+    return `Recommended because it’s ${depth} and ${cat}.`;
+  };
 
   useEffect(() => {
     if (requestedIds.length === 0) {
@@ -136,21 +143,17 @@ const CareerRoadmapAIHelp = () => {
           .map((id: unknown) => byId.get(String(id)))
           .filter((c): c is RoadmapCourseItem => !!c);
 
-        const studyOrderIdsRaw = (payload as any)?.studyOrder ?? (payload as any)?.study_order ?? [];
-        const studyOrderIds = Array.isArray(studyOrderIdsRaw) ? studyOrderIdsRaw : [];
-        const studyOrderCourses = studyOrderIds
-          .map((id: unknown) => byId.get(String(id)))
-          .filter((c): c is RoadmapCourseItem => !!c);
-
+        // UX requirement: do not present “recommended study order” sequencing as the primary output.
+        // Show the AI-ranked recommended courses; if missing, fallback to local ranking.
         const rankedToShow =
-          ranked.length > 0 ? ranked : studyOrderCourses.length > 0 ? studyOrderCourses : rankSelectedCourses(selectedCourses);
+          ranked.length > 0 ? ranked : rankSelectedCourses(selectedCourses);
 
         const summary = answerText || buildStudyPlanSummary(selectedCourses, topPick);
 
         setRecommendation({
           topPick,
           ranked: rankedToShow,
-          studyOrder: studyOrderCourses.map((c) => c.id),
+          studyOrder: [],
           summary,
         });
       } catch {
@@ -291,46 +294,52 @@ const CareerRoadmapAIHelp = () => {
             transition={{ delay: 0.15 }}
           >
             <div className="flex items-center gap-2 mb-4">
-              <ListOrdered className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-bold text-foreground">Recommended study order</h2>
+              <Trophy className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-bold text-foreground">Recommended courses</h2>
             </div>
-            <ol className="space-y-3">
-              {recommendation.ranked.map((course, index) => (
-                <li
-                  key={course.id}
-                  className={`flex items-center gap-4 p-4 rounded-xl border bg-card ${
-                    course.id === recommendation.topPick.id ? "border-accent/50" : "border-border"
-                  }`}
-                >
-                  <span
-                    className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                      course.id === recommendation.topPick.id
-                        ? "bg-accent text-accent-foreground"
-                        : "bg-muted text-muted-foreground"
+
+            <div className="space-y-3">
+              {recommendation.ranked.map((course) => {
+                const isTop = course.id === recommendation.topPick.id;
+                const why = getLocalWhy(course, isTop);
+                return (
+                  <div
+                    key={course.id}
+                    className={`flex items-start gap-4 p-4 rounded-xl border bg-card ${
+                      isTop ? "border-accent/50" : "border-border"
                     }`}
                   >
-                    {index + 1}
-                  </span>
-                  <div className="flex gap-3 min-w-0 flex-1">
-                    <img
-                      src={course.thumbnail || DEFAULT_THUMBNAIL}
-                      alt=""
-                      className="w-14 h-14 rounded-lg object-cover shrink-0 hidden sm:block"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-foreground truncate">{course.title}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-1">{course.category || "Course"}</p>
+                    <div className="flex gap-3 min-w-0 flex-1">
+                      <img
+                        src={course.thumbnail || DEFAULT_THUMBNAIL}
+                        alt=""
+                        className="w-14 h-14 rounded-lg object-cover shrink-0 hidden sm:block"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-foreground truncate">{course.title}</p>
+                          {isTop && (
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
+                              Best course to start
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-1 mt-1">
+                          {course.category || "Course"}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{why}</p>
+                      </div>
                     </div>
+                    <Button variant="outline" size="sm" asChild className="shrink-0 gap-1 mt-1">
+                      <Link to={`/course/${course.id}`}>
+                        Open
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </Link>
+                    </Button>
                   </div>
-                  <Button variant="outline" size="sm" asChild className="shrink-0 gap-1">
-                    <Link to={`/course/${course.id}`}>
-                      Open
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </Link>
-                  </Button>
-                </li>
-              ))}
-            </ol>
+                );
+              })}
+            </div>
           </motion.section>
 
           <div className="flex flex-wrap gap-3">
