@@ -1185,7 +1185,12 @@ export const aiAPI = {
    * Tries known route variants; throws on success:false or empty payload.
    */
   recommendRoadmap: async (courseIds: number[]) => {
-    const body = JSON.stringify({ courseIds, course_ids: courseIds });
+    const body = JSON.stringify({
+      courseIds,
+      course_ids: courseIds,
+      includeRelatedCourses: true,
+      include_related_courses: true,
+    });
     const endpoints = [
       "/ai/roadmap/recommend",
       "/ai/roadmap/recommend/",
@@ -1233,7 +1238,12 @@ export const aiAPI = {
           Array.isArray(payload.rankings) ||
           Array.isArray(payload.rankedCourseIds) ||
           Array.isArray(payload.studyOrder) ||
-          Array.isArray(payload.study_order);
+          Array.isArray(payload.study_order) ||
+          Array.isArray(payload.related) ||
+          Array.isArray(payload.relatedCourses) ||
+          Array.isArray(payload.related_courses) ||
+          Array.isArray(payload.suggestedCourses) ||
+          Array.isArray(payload.suggested_courses);
         if (!hasSignal) {
           throw new Error("Roadmap API returned an empty recommendation");
         }

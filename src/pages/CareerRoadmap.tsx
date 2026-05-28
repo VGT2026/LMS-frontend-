@@ -141,8 +141,8 @@ const CareerRoadmap = () => {
             Choose courses, get AI guidance
           </h1>
           <p className="mt-4 text-primary-foreground/80 text-lg leading-relaxed">
-            Browse every published course from your organization, pick the ones you care about, and we&apos;ll
-            recommend the best order to study — starting with one clear top pick from your selection.
+            Browse every published course from your organization, pick the ones you care about, and AI will
+            rank your selection plus suggest related courses from the same catalog.
           </p>
         </motion.div>
       </motion.section>

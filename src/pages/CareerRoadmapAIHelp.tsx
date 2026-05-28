@@ -116,7 +116,7 @@ const CareerRoadmapAIHelp = () => {
 
         if (cancelled) return;
 
-        const parsed = parseRecommendApiResponse(payload, selectedCourses);
+        const parsed = parseRecommendApiResponse(payload, selectedCourses, catalog);
         if (!parsed) {
           throw new Error("Could not read the recommendation from the server response.");
         }
@@ -131,7 +131,7 @@ const CareerRoadmapAIHelp = () => {
         );
         setUsedFallback(true);
         setFallbackError(message);
-        setRecommendation(buildLocalRecommendation(selectedCourses));
+        setRecommendation(buildLocalRecommendation(selectedCourses, catalog));
         toast({
           title:
             status === 401
@@ -154,7 +154,57 @@ const CareerRoadmapAIHelp = () => {
     return () => {
       cancelled = true;
     };
-  }, [loading, requestedIds.length, selectedCourses, toast, retryKey]);
+  }, [loading, requestedIds.length, selectedCourses, catalog, toast, retryKey]);
+
+  const selectedIdSet = useMemo(
+    () => new Set(selectedCourses.map((c) => c.id)),
+    [selectedCourses]
+  );
+
+  const renderCourseRow = (
+    course: RoadmapCourseItem,
+    opts: { isTop?: boolean; badge?: string; variant?: "selected" | "related" }
+  ) => {
+    const why = recommendation
+      ? getCourseRecommendationReason(recommendation, course, { useOfflineHeuristic: usedFallback })
+      : undefined;
+    const border =
+      opts.variant === "related"
+        ? "border-primary/30"
+        : opts.isTop
+          ? "border-accent/50"
+          : "border-border";
+
+    return (
+      <div key={course.id} className={`flex items-start gap-4 p-4 rounded-xl border bg-card ${border}`}>
+        <div className="flex gap-3 min-w-0 flex-1">
+          <img
+            src={course.thumbnail || DEFAULT_THUMBNAIL}
+            alt=""
+            className="w-14 h-14 rounded-lg object-cover shrink-0 hidden sm:block"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-medium text-foreground truncate">{course.title}</p>
+              {opts.badge && (
+                <span className="text-[10px] font-bold uppercase tracking-widest text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
+                  {opts.badge}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{course.category || "Course"}</p>
+            {why ? <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{why}</p> : null}
+          </div>
+        </div>
+        <Button variant="outline" size="sm" asChild className="shrink-0 gap-1 mt-1">
+          <Link to={`/course/${course.id}`}>
+            Open
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        </Button>
+      </div>
+    );
+  };
 
   if (requestedIds.length === 0) return null;
 
@@ -260,6 +310,11 @@ const CareerRoadmapAIHelp = () => {
             <div className="flex items-center gap-2 text-accent mb-4">
               <Trophy className="w-5 h-5" />
               <span className="text-xs font-bold uppercase tracking-wider">Best to start with</span>
+              {!selectedIdSet.has(recommendation.topPick.id) && (
+                <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
+                  From catalog
+                </span>
+              )}
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
               <img
@@ -293,56 +348,41 @@ const CareerRoadmapAIHelp = () => {
           >
             <div className="flex items-center gap-2 mb-4">
               <Trophy className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-bold text-foreground">Recommended courses</h2>
+              <h2 className="text-lg font-bold text-foreground">Your selected courses</h2>
             </div>
 
             <div className="space-y-3">
-              {recommendation.ranked.map((course) => {
-                const isTop = course.id === recommendation.topPick.id;
-                const why = getCourseRecommendationReason(recommendation, course, {
-                  useOfflineHeuristic: usedFallback,
-                });
-                return (
-                  <div
-                    key={course.id}
-                    className={`flex items-start gap-4 p-4 rounded-xl border bg-card ${
-                      isTop ? "border-accent/50" : "border-border"
-                    }`}
-                  >
-                    <div className="flex gap-3 min-w-0 flex-1">
-                      <img
-                        src={course.thumbnail || DEFAULT_THUMBNAIL}
-                        alt=""
-                        className="w-14 h-14 rounded-lg object-cover shrink-0 hidden sm:block"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium text-foreground truncate">{course.title}</p>
-                          {isTop && (
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
-                              Best course to start
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground line-clamp-1 mt-1">
-                          {course.category || "Course"}
-                        </p>
-                        {why ? (
-                          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{why}</p>
-                        ) : null}
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" asChild className="shrink-0 gap-1 mt-1">
-                      <Link to={`/course/${course.id}`}>
-                        Open
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </Link>
-                    </Button>
-                  </div>
-                );
-              })}
+              {recommendation.ranked.map((course) =>
+                renderCourseRow(course, {
+                  isTop: course.id === recommendation.topPick.id,
+                  badge:
+                    course.id === recommendation.topPick.id ? "Best course to start" : undefined,
+                  variant: "selected",
+                })
+              )}
             </div>
           </motion.section>
+
+          {recommendation.related.length > 0 && (
+            <motion.section
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="w-5 h-5 text-accent" />
+                <h2 className="text-lg font-bold text-foreground">More courses for you</h2>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Related picks from your catalog based on what you selected — not in your original list.
+              </p>
+              <div className="space-y-3">
+                {recommendation.related.map((course) =>
+                  renderCourseRow(course, { badge: "Related", variant: "related" })
+                )}
+              </div>
+            </motion.section>
+          )}
 
           <div className="flex flex-wrap gap-3">
             <Button variant="outline" asChild>
