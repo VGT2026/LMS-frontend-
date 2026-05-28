@@ -15,6 +15,8 @@ export interface RoadmapRecommendation {
   ranked: RoadmapCourseItem[];
   studyOrder: number[];
   summary: string;
+  /** Per-course explanation from AI (courseId → reason). */
+  courseReasons: Record<number, string>;
 }
 
 export function mapApiToCourse(raw: Record<string, unknown>): RoadmapCourseItem | null {
@@ -63,15 +65,59 @@ export function buildStudyPlanSummary(courses: RoadmapCourseItem[], topPick: Roa
   return `Start with "${topPick.title}" — it is the best entry point among your selection based on topic breadth and course metadata.${tail}`;
 }
 
+/** Offline-only: reasons derived from each course’s metadata (not fixed copy). */
+export function buildLocalCourseReason(
+  course: RoadmapCourseItem,
+  isTopPick: boolean
+): string {
+  if (isTopPick) {
+    const level = course.level ? ` (${course.level})` : "";
+    const cat = course.category ? ` in ${course.category}` : "";
+    return `"${course.title}"${level} is the strongest starting point among your selection${cat}.`;
+  }
+  const bits: string[] = [];
+  if (course.level) bits.push(course.level);
+  if (course.category) bits.push(course.category);
+  if (course.duration) bits.push(course.duration);
+  if (bits.length) return `Supports your path with ${bits.join(" · ")}.`;
+  const snippet = course.description?.slice(0, 100).trim();
+  return snippet
+    ? `${snippet}${course.description.length > 100 ? "…" : ""}`
+    : `Complements your other selected courses.`;
+}
+
 export function buildLocalRecommendation(selected: RoadmapCourseItem[]): RoadmapRecommendation {
   const ranked = rankSelectedCourses(selected);
   const topPick = ranked[0];
+  const courseReasons: Record<number, string> = {};
+  for (const c of ranked) {
+    courseReasons[c.id] = buildLocalCourseReason(c, c.id === topPick.id);
+  }
   return {
     topPick,
     ranked,
     studyOrder: ranked.map((c) => c.id),
     summary: buildStudyPlanSummary(selected, topPick),
+    courseReasons,
   };
+}
+
+function readReason(row: Record<string, unknown>): string | undefined {
+  for (const key of ["reason", "why", "explanation", "rationale", "summary"]) {
+    const v = row[key];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return undefined;
+}
+
+function mergeReasons(
+  target: Record<number, string>,
+  id: number,
+  reason: string | undefined,
+  byId: Map<number, RoadmapCourseItem>
+) {
+  if (!reason || !byId.has(id)) return;
+  target[id] = reason;
 }
 
 function pickCourseById(
@@ -91,22 +137,28 @@ export function parseRecommendApiResponse(
   if (!selected.length) return null;
   const byId = new Map(selected.map((c) => [c.id, c]));
   const raw = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
+  const courseReasons: Record<number, string> = {};
 
   const topRaw =
     raw.topPick ??
     raw.top_pick ??
     (typeof raw.recommendedCourseId !== "undefined" ? { courseId: raw.recommendedCourseId } : null) ??
-    (typeof raw.recommended_course_id !== "undefined" ? { course_id: raw.recommended_course_id } : null);
+    (typeof raw.recommended_course_id !== "undefined" ? { course_id: raw.recommended_course_id } : null) ??
+    (typeof raw.topPickCourseId !== "undefined" ? { courseId: raw.topPickCourseId } : null) ??
+    (typeof raw.top_pick_course_id !== "undefined" ? { course_id: raw.top_pick_course_id } : null);
 
   let topPick: RoadmapCourseItem | undefined;
   if (topRaw && typeof topRaw === "object") {
     const t = topRaw as Record<string, unknown>;
-    topPick = pickCourseById(t.courseId ?? t.course_id ?? t.id, byId);
+    const id = t.courseId ?? t.course_id ?? t.id;
+    topPick = pickCourseById(id, byId);
+    if (topPick) mergeReasons(courseReasons, topPick.id, readReason(t), byId);
   } else {
     topPick = pickCourseById(topRaw, byId);
   }
 
-  const rankedRaw = raw.ranked ?? raw.rankings ?? raw.recommendedOrder;
+  const rankedRaw =
+    raw.ranked ?? raw.rankings ?? raw.recommendedOrder ?? raw.rankedCourseIds;
   const ranked: RoadmapCourseItem[] = [];
 
   if (Array.isArray(rankedRaw)) {
@@ -117,7 +169,20 @@ export function parseRecommendApiResponse(
       } else if (item && typeof item === "object") {
         const row = item as Record<string, unknown>;
         const c = pickCourseById(row.courseId ?? row.course_id ?? row.id, byId);
-        if (c) ranked.push(c);
+        if (c) {
+          ranked.push(c);
+          mergeReasons(courseReasons, c.id, readReason(row), byId);
+        }
+      }
+    }
+  }
+
+  const reasonsMap = raw.reasons ?? raw.courseReasons ?? raw.course_reasons;
+  if (reasonsMap && typeof reasonsMap === "object" && !Array.isArray(reasonsMap)) {
+    for (const [key, val] of Object.entries(reasonsMap as Record<string, unknown>)) {
+      const id = Number(key);
+      if (Number.isFinite(id) && typeof val === "string") {
+        mergeReasons(courseReasons, id, val.trim(), byId);
       }
     }
   }
@@ -149,20 +214,36 @@ export function parseRecommendApiResponse(
   for (const c of selected) push(c);
 
   const summary =
-    typeof raw.summary === "string"
-      ? raw.summary
-      : typeof raw.advice === "string"
-        ? raw.advice
-        : typeof raw.message === "string"
-          ? raw.message
-          : buildStudyPlanSummary(selected, topPick);
+    typeof raw.answer === "string" && raw.answer.trim()
+      ? raw.answer.trim()
+      : typeof raw.aiAnswer === "string" && raw.aiAnswer.trim()
+        ? raw.aiAnswer.trim()
+        : typeof raw.summary === "string" && raw.summary.trim()
+          ? raw.summary.trim()
+          : typeof raw.advice === "string" && raw.advice.trim()
+            ? raw.advice.trim()
+            : typeof raw.message === "string" && raw.message.trim()
+              ? raw.message.trim()
+              : buildStudyPlanSummary(selected, topPick);
 
   return {
     topPick,
     ranked: ordered,
     studyOrder: ordered.map((c) => c.id),
     summary,
+    courseReasons,
   };
+}
+
+export function getCourseRecommendationReason(
+  recommendation: RoadmapRecommendation,
+  course: RoadmapCourseItem,
+  options?: { useOfflineHeuristic?: boolean }
+): string | undefined {
+  const fromApi = recommendation.courseReasons[course.id]?.trim();
+  if (fromApi) return fromApi;
+  if (!options?.useOfflineHeuristic) return undefined;
+  return buildLocalCourseReason(course, course.id === recommendation.topPick.id);
 }
 
 export const ROADMAP_SELECTION_STORAGE_KEY = "lms_roadmap_selected";

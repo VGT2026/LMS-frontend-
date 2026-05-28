@@ -15,10 +15,10 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
   buildLocalRecommendation,
-  buildStudyPlanSummary,
+  getCourseRecommendationReason,
   mapApiToCourse,
   parseCourseIdsParam,
-  rankSelectedCourses,
+  parseRecommendApiResponse,
   type RoadmapCourseItem,
   type RoadmapRecommendation,
 } from "@/utils/roadmapAi";
@@ -45,13 +45,12 @@ const CareerRoadmapAIHelp = () => {
     return requestedIds.map((id) => byId.get(id)).filter((c): c is RoadmapCourseItem => !!c);
   }, [catalog, requestedIds]);
 
-  const getLocalWhy = (course: RoadmapCourseItem, isTopPick: boolean) => {
-    if (isTopPick) return "Best starting point: strong foundation and broad relevance to your selection.";
-    const cat = course.category ? `focused on ${course.category}` : "building on your selection";
-    const len = course.description?.length ?? 0;
-    const depth = len > 140 ? "deeper" : len > 60 ? "balanced" : "quick wins";
-    return `Recommended because it’s ${depth} and ${cat}.`;
-  };
+  const topPickReason = useMemo(() => {
+    if (!recommendation) return undefined;
+    return getCourseRecommendationReason(recommendation, recommendation.topPick, {
+      useOfflineHeuristic: usedFallback,
+    });
+  }, [recommendation, usedFallback]);
 
   useEffect(() => {
     if (requestedIds.length === 0) {
@@ -114,55 +113,19 @@ const CareerRoadmapAIHelp = () => {
 
         if (cancelled) return;
 
-        const byId = new Map(selectedCourses.map((c) => [String(c.id), c] as const));
+        const parsed = parseRecommendApiResponse(payload, selectedCourses);
+        if (!parsed) {
+          throw new Error("Invalid recommendation response");
+        }
 
-        const answerText =
-          typeof (payload as any)?.answer === "string"
-            ? (payload as any).answer
-            : typeof (payload as any)?.aiAnswer === "string"
-              ? (payload as any).aiAnswer
-              : "";
-
-        const recommendedCourseId =
-          (payload as any)?.recommendedCourseId ??
-          (payload as any)?.recommended_course_id ??
-          (payload as any)?.topPickCourseId ??
-          (payload as any)?.top_pick_course_id;
-
-        const topPick =
-          byId.get(String(recommendedCourseId)) ?? selectedCourses[0];
-
-        const rankedIdsRaw =
-          (payload as any)?.ranked ??
-          (payload as any)?.rankedCourseIds ??
-          (payload as any)?.rankings ??
-          [];
-
-        const rankedIds = Array.isArray(rankedIdsRaw) ? rankedIdsRaw : [];
-        const ranked = rankedIds
-          .map((id: unknown) => byId.get(String(id)))
-          .filter((c): c is RoadmapCourseItem => !!c);
-
-        // UX requirement: do not present “recommended study order” sequencing as the primary output.
-        // Show the AI-ranked recommended courses; if missing, fallback to local ranking.
-        const rankedToShow =
-          ranked.length > 0 ? ranked : rankSelectedCourses(selectedCourses);
-
-        const summary = answerText || buildStudyPlanSummary(selectedCourses, topPick);
-
-        setRecommendation({
-          topPick,
-          ranked: rankedToShow,
-          studyOrder: [],
-          summary,
-        });
+        setRecommendation(parsed);
       } catch {
         if (cancelled) return;
         setUsedFallback(true);
         setRecommendation(buildLocalRecommendation(selectedCourses));
         toast({
           title: "Using offline ranking",
-          description: "POST /ai/roadmap/recommend failed. Showing a local study order from your selected courses.",
+          description: "AI recommendation is unavailable. Showing a local comparison from your selected courses.",
         });
       } finally {
         if (!cancelled) setAiLoading(false);
@@ -277,7 +240,10 @@ const CareerRoadmapAIHelp = () => {
                 {recommendation.topPick.category && (
                   <p className="text-xs font-semibold text-accent uppercase mt-1">{recommendation.topPick.category}</p>
                 )}
-                <p className="text-sm text-muted-foreground mt-2 line-clamp-3">{recommendation.topPick.description}</p>
+                {topPickReason && (
+                  <p className="text-sm text-foreground/90 mt-2 leading-relaxed">{topPickReason}</p>
+                )}
+                <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{recommendation.topPick.description}</p>
                 <Button asChild className="mt-4 bg-accent hover:bg-accent/90 gap-2">
                   <Link to={`/course/${recommendation.topPick.id}`}>
                     Start this course
@@ -301,7 +267,9 @@ const CareerRoadmapAIHelp = () => {
             <div className="space-y-3">
               {recommendation.ranked.map((course) => {
                 const isTop = course.id === recommendation.topPick.id;
-                const why = getLocalWhy(course, isTop);
+                const why = getCourseRecommendationReason(recommendation, course, {
+                  useOfflineHeuristic: usedFallback,
+                });
                 return (
                   <div
                     key={course.id}
@@ -327,7 +295,9 @@ const CareerRoadmapAIHelp = () => {
                         <p className="text-xs text-muted-foreground line-clamp-1 mt-1">
                           {course.category || "Course"}
                         </p>
-                        <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{why}</p>
+                        {why ? (
+                          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{why}</p>
+                        ) : null}
                       </div>
                     </div>
                     <Button variant="outline" size="sm" asChild className="shrink-0 gap-1 mt-1">
