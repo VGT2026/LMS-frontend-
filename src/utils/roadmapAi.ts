@@ -129,6 +129,23 @@ function pickCourseById(
   return byId.get(n);
 }
 
+function unwrapRecommendRoot(data: unknown): Record<string, unknown> {
+  if (!data || typeof data !== "object") return {};
+  const root = data as Record<string, unknown>;
+  let inner: unknown = root.data ?? root.result ?? root.recommendation ?? root;
+  if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+    const row = inner as Record<string, unknown>;
+    if (row.recommendation && typeof row.recommendation === "object") {
+      inner = row.recommendation;
+    } else if (row.data && typeof row.data === "object") {
+      inner = row.data;
+    }
+  }
+  return inner && typeof inner === "object" && !Array.isArray(inner)
+    ? (inner as Record<string, unknown>)
+    : root;
+}
+
 /** Map backend recommend payload; only returns courses from `selected`. */
 export function parseRecommendApiResponse(
   data: unknown,
@@ -136,12 +153,14 @@ export function parseRecommendApiResponse(
 ): RoadmapRecommendation | null {
   if (!selected.length) return null;
   const byId = new Map(selected.map((c) => [c.id, c]));
-  const raw = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
+  const raw = unwrapRecommendRoot(data);
   const courseReasons: Record<number, string> = {};
 
   const topRaw =
     raw.topPick ??
     raw.top_pick ??
+    raw.recommendedCourse ??
+    raw.recommended_course ??
     (typeof raw.recommendedCourseId !== "undefined" ? { courseId: raw.recommendedCourseId } : null) ??
     (typeof raw.recommended_course_id !== "undefined" ? { course_id: raw.recommended_course_id } : null) ??
     (typeof raw.topPickCourseId !== "undefined" ? { courseId: raw.topPickCourseId } : null) ??

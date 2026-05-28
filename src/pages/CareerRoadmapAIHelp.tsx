@@ -10,7 +10,7 @@ import {
   Trophy,
   ExternalLink,
 } from "lucide-react";
-import { aiAPI, courseAPI } from "@/services/api";
+import { aiAPI, courseAPI, formatApiErrorMessage, readHttpStatus } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -38,7 +38,9 @@ const CareerRoadmapAIHelp = () => {
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
   const [usedFallback, setUsedFallback] = useState(false);
+  const [fallbackError, setFallbackError] = useState<string | null>(null);
   const [recommendation, setRecommendation] = useState<RoadmapRecommendation | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   const selectedCourses = useMemo(() => {
     const byId = new Map(catalog.map((c) => [String(c.id), c] as const));
@@ -108,6 +110,7 @@ const CareerRoadmapAIHelp = () => {
     const run = async () => {
       setAiLoading(true);
       setUsedFallback(false);
+      setFallbackError(null);
       try {
         const payload = await aiAPI.recommendRoadmap(selectedCourses.map((c) => c.id));
 
@@ -115,17 +118,32 @@ const CareerRoadmapAIHelp = () => {
 
         const parsed = parseRecommendApiResponse(payload, selectedCourses);
         if (!parsed) {
-          throw new Error("Invalid recommendation response");
+          throw new Error("Could not read the recommendation from the server response.");
         }
 
         setRecommendation(parsed);
-      } catch {
+      } catch (err) {
         if (cancelled) return;
+        const status = readHttpStatus(err);
+        const message = formatApiErrorMessage(
+          err instanceof Error ? err.message : "Roadmap recommendation failed",
+          status
+        );
         setUsedFallback(true);
+        setFallbackError(message);
         setRecommendation(buildLocalRecommendation(selectedCourses));
         toast({
-          title: "Using offline ranking",
-          description: "AI recommendation is unavailable. Showing a local comparison from your selected courses.",
+          title:
+            status === 401
+              ? "Sign in required"
+              : status === 503
+                ? "AI service unavailable"
+                : "Using offline ranking",
+          description:
+            status === 401
+              ? "Your session may have expired. Sign in again, then retry AI guidance."
+              : message,
+          variant: status === 401 ? "destructive" : "default",
         });
       } finally {
         if (!cancelled) setAiLoading(false);
@@ -136,7 +154,7 @@ const CareerRoadmapAIHelp = () => {
     return () => {
       cancelled = true;
     };
-  }, [loading, requestedIds.length, selectedCourses, toast]);
+  }, [loading, requestedIds.length, selectedCourses, toast, retryKey]);
 
   if (requestedIds.length === 0) return null;
 
@@ -183,6 +201,20 @@ const CareerRoadmapAIHelp = () => {
           Based on {selectedCourses.length} course{selectedCourses.length === 1 ? "" : "s"} you selected
           {usedFallback ? " (offline ranking)" : ""}.
         </p>
+        {usedFallback && fallbackError && (
+          <p className="text-sm text-destructive/90 mt-2 max-w-xl">{fallbackError}</p>
+        )}
+        {usedFallback && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={() => setRetryKey((k) => k + 1)}
+          >
+            Retry AI recommendation
+          </Button>
+        )}
       </motion.div>
 
       {loading || aiLoading ? (

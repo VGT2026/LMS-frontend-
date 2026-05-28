@@ -1178,18 +1178,75 @@ export const aiAPI = {
     }),
 
   /** Career roadmap: recommend study order from user-selected course IDs */
-  recommendCareerPath: (courseIds: number[]) =>
-    apiRequest("/ai/roadmap/recommend", {
-      method: "POST",
-      body: JSON.stringify({ courseIds }),
-    }).then((res) => res?.data ?? res),
+  recommendCareerPath: (courseIds: number[]) => aiAPI.recommendRoadmap(courseIds),
 
-  /** Roadmap: recommend study order from selected course IDs */
-  recommendRoadmap: (courseIds: number[]) =>
-    apiRequest("/ai/roadmap/recommend", {
-      method: "POST",
-      body: JSON.stringify({ courseIds }),
-    }).then((res) => res?.data ?? res),
+  /**
+   * Compare and rank user-selected courses (POST /ai/roadmap/recommend).
+   * Tries known route variants; throws on success:false or empty payload.
+   */
+  recommendRoadmap: async (courseIds: number[]) => {
+    const body = JSON.stringify({ courseIds, course_ids: courseIds });
+    const endpoints = [
+      "/ai/roadmap/recommend",
+      "/ai/roadmap/recommend/",
+      "/ai/career-roadmap/recommend",
+    ];
+    let firstError: unknown = null;
+
+    const unwrap = (res: unknown): Record<string, unknown> => {
+      if (!res || typeof res !== "object") return {};
+      const root = res as Record<string, unknown>;
+      if (root.success === false) {
+        const msg =
+          (typeof root.message === "string" && root.message) ||
+          (typeof root.error === "string" && root.error) ||
+          "Roadmap recommendation failed";
+        const err = new Error(formatApiErrorMessage(msg)) as Error & { status?: number };
+        err.status = typeof root.status === "number" ? root.status : 400;
+        throw err;
+      }
+      let inner: unknown = root.data ?? root.result ?? root.recommendation ?? root;
+      if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+        const row = inner as Record<string, unknown>;
+        if (row.recommendation && typeof row.recommendation === "object") {
+          inner = row.recommendation;
+        } else if (row.data && typeof row.data === "object") {
+          inner = row.data;
+        }
+      }
+      if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+        return inner as Record<string, unknown>;
+      }
+      return root;
+    };
+
+    for (const endpoint of endpoints) {
+      try {
+        const res = await apiRequest(endpoint, { method: "POST", body });
+        const payload = unwrap(res);
+        const hasSignal =
+          typeof payload.answer === "string" ||
+          typeof payload.aiAnswer === "string" ||
+          payload.recommendedCourseId != null ||
+          payload.recommended_course_id != null ||
+          Array.isArray(payload.ranked) ||
+          Array.isArray(payload.rankings) ||
+          Array.isArray(payload.rankedCourseIds) ||
+          Array.isArray(payload.studyOrder) ||
+          Array.isArray(payload.study_order);
+        if (!hasSignal) {
+          throw new Error("Roadmap API returned an empty recommendation");
+        }
+        return payload;
+      } catch (e) {
+        if (!firstError) firstError = e;
+        const status = readHttpStatus(e);
+        if (status === 404 || status === 405) continue;
+        throw e;
+      }
+    }
+    throw firstError instanceof Error ? firstError : new Error("Roadmap recommendation failed");
+  },
 
   /**
    * Ask AI Tutor a question
