@@ -8,18 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { GraduationCap, Eye, EyeOff, ArrowLeft, CheckCircle, Mail, User, Lock, Building2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { authAPI, courseAPI } from "@/services/api";
+import { authAPI } from "@/services/api";
 import { getDisplayTenantName } from "@/utils/tenant";
 
 interface OrgOption {
   id: string;
   name: string;
 }
-
-const DEFAULT_CATEGORIES = [
-  "Development", "Data Science", "Design", "Cloud",
-  "AI/ML", "DevOps", "Security", "Business"
-];
 
 const Register = () => {
   const { register } = useAuth();
@@ -29,7 +24,6 @@ const Register = () => {
     password: "",
     confirmPassword: "",
     organizationId: "",
-    preferredCategories: [] as string[]
   });
   const [organizations, setOrganizations] = useState<OrgOption[]>([]);
   const [orgsLoading, setOrgsLoading] = useState(true);
@@ -39,7 +33,6 @@ const Register = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -58,33 +51,6 @@ const Register = () => {
     };
     fetchOrganizations();
   }, []);
-
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await courseAPI.getCategories?.();
-        const fetchedCategories = Array.isArray(response?.data) ? response.data : [];
-        if (fetchedCategories.length > 0) {
-          setCategories(fetchedCategories);
-        } else {
-          setCategories(DEFAULT_CATEGORIES);
-        }
-      } catch (error) {
-        console.error('Failed to fetch categories:', error);
-        setCategories(DEFAULT_CATEGORIES);
-      }
-    };
-    fetchCategories();
-  }, []);
-
-  const handleCategoryToggle = (category: string) => {
-    setFormData(prev => ({
-      ...prev,
-      preferredCategories: prev.preferredCategories.includes(category)
-        ? prev.preferredCategories.filter(c => c !== category)
-        : [...prev.preferredCategories, category]
-    }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -311,26 +277,6 @@ const Register = () => {
                 >
                   {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-foreground font-medium">Preferred Categories (Optional)</Label>
-              <div className="flex flex-wrap gap-2">
-                {categories.map(category => (
-                  <button
-                    key={category}
-                    type="button"
-                    onClick={() => handleCategoryToggle(category)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      formData.preferredCategories.includes(category)
-                        ? "bg-accent text-accent-foreground"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    }`}
-                  >
-                    {category}
-                  </button>
-                ))}
               </div>
             </div>
 
