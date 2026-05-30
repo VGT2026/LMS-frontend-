@@ -148,16 +148,6 @@ const Login = () => {
               Sign up here
             </Link>
           </p>
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            Admin: admin@lmspro.com / admin123
-          </p>
-          <p className="mt-1 text-center text-xs text-muted-foreground">
-            If login fails, visit{" "}
-            <a href="/api/auth/reset-admin" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-              /api/auth/reset-admin
-            </a>{" "}
-            to reset admin password, then try again.
-          </p>
 
         </motion.div>
       </div>

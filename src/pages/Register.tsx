@@ -230,9 +230,6 @@ const Register = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Choose the organization you belong to so your admin can manage your account.
-                </p>
               </div>
             )}
 
