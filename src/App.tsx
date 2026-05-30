@@ -28,6 +28,7 @@ import AdminCreateCourse from "./pages/AdminCreateCourse";
 import AdminReports from "./pages/AdminReports";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 import SuperAdminAdmins from "./pages/SuperAdminAdmins";
+import SuperAdminAdminDetail from "./pages/SuperAdminAdminDetail";
 import SuperAdminUsers from "./pages/SuperAdminUsers";
 import SuperAdminTenants from "./pages/SuperAdminTenants";
 import InstructorDashboard from "./pages/InstructorDashboard";
@@ -136,6 +137,7 @@ const AppRoutes = () => {
       <Route path="/admin/reports" element={<AdminRoute><AdminReports /></AdminRoute>} />
       <Route path="/superadmin" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
       <Route path="/superadmin/admins" element={<SuperAdminRoute><SuperAdminAdmins /></SuperAdminRoute>} />
+      <Route path="/superadmin/admins/:adminId" element={<SuperAdminRoute><SuperAdminAdminDetail /></SuperAdminRoute>} />
       <Route path="/superadmin/users" element={<SuperAdminRoute><SuperAdminUsers /></SuperAdminRoute>} />
       <Route path="/superadmin/tenants" element={<SuperAdminRoute><SuperAdminTenants /></SuperAdminRoute>} />
       <Route path="/instructor" element={<ProtectedRoute><InstructorDashboard /></ProtectedRoute>} />

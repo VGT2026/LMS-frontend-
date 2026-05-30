@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { authAPI, formatApiErrorMessage, normalizeUsersList, readHttpStatus } from "@/services/api";
 import type { PlatformAdminRecord } from "@/data/superAdminData";
 import { formatTenantLabel, parseTenantFromApiUser } from "@/utils/tenant";
-import { Shield, UserPlus, Search, ArrowLeft } from "lucide-react";
+import { Shield, UserPlus, Search, ArrowLeft, Users, ChevronRight } from "lucide-react";
 
 function formatCreatedAt(iso: string) {
   try {
@@ -329,12 +329,13 @@ const SuperAdminAdmins = () => {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Created</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Status</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Active</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Members</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-muted-foreground">
                     {loadError ? "Fix the error above and refresh the page." : "No platform admins yet. Create one to get started."}
                   </td>
                 </tr>
@@ -347,10 +348,13 @@ const SuperAdminAdmins = () => {
                           {a.name.charAt(0)}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                          <Link
+                            to={`/superadmin/admins/${a.id}`}
+                            className="text-sm font-medium text-foreground flex items-center gap-1.5 hover:text-primary hover:underline"
+                          >
                             {a.name}
                             <Shield className="w-3.5 h-3.5 text-primary" />
-                          </p>
+                          </Link>
                           <p className="text-xs text-muted-foreground">{a.email}</p>
                         </div>
                       </div>
@@ -373,6 +377,15 @@ const SuperAdminAdmins = () => {
                         disabled={user?.email === a.email}
                         title={user?.email === a.email ? "Cannot deactivate your own account" : undefined}
                       />
+                    </td>
+                    <td className="px-5 py-3">
+                      <Button asChild variant="outline" size="sm" className="gap-1">
+                        <Link to={`/superadmin/admins/${a.id}`}>
+                          <Users className="w-3.5 h-3.5" />
+                          View
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </Link>
+                      </Button>
                     </td>
                   </tr>
                 ))

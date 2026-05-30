@@ -465,6 +465,84 @@ export const authAPI = {
     return apiRequest(`/auth/superadmin/admins${qs ? `?${qs}` : ''}`);
   },
 
+  /**
+   * Superadmin: overview for ONE admin — their organization's students + instructors.
+   * Tries a dedicated endpoint first, then composes from tenant-scoped user lists.
+   */
+  getAdminOverview: async (admin: {
+    id: string | number;
+    tenant_id?: string | number;
+  }): Promise<{
+    students: Record<string, unknown>[];
+    instructors: Record<string, unknown>[];
+    studentCount: number;
+    instructorCount: number;
+    source: 'endpoint' | 'composed';
+  }> => {
+    const pickCount = (root: Record<string, unknown>, keys: string[]): number | undefined => {
+      for (const k of keys) {
+        const v = root[k];
+        if (typeof v === 'number') return v;
+        const counts = root.counts as Record<string, unknown> | undefined;
+        if (counts && typeof counts[k] === 'number') return counts[k] as number;
+      }
+      return undefined;
+    };
+
+    // 1) Dedicated endpoint (preferred): GET /auth/superadmin/admins/:id/overview
+    try {
+      const res = await apiRequest(`/auth/superadmin/admins/${admin.id}/overview`);
+      const data = (res?.data ?? res) as Record<string, unknown>;
+      const students = normalizeUsersList(
+        (data.students as unknown) ?? data
+      ) as Record<string, unknown>[];
+      const instructors = normalizeUsersList(
+        (data.instructors as unknown) ?? []
+      ) as Record<string, unknown>[];
+      if (Array.isArray(data.students) || Array.isArray(data.instructors) || data.counts) {
+        return {
+          students,
+          instructors,
+          studentCount:
+            pickCount(data, ['studentCount', 'student_count', 'students', 'totalStudents']) ??
+            students.length,
+          instructorCount:
+            pickCount(data, [
+              'instructorCount',
+              'instructor_count',
+              'instructors',
+              'totalInstructors',
+            ]) ?? instructors.length,
+          source: 'endpoint',
+        };
+      }
+    } catch (e) {
+      const status = readHttpStatus(e);
+      // Only swallow "route missing/unsupported" errors; rethrow real auth failures.
+      if (status && status !== 404 && status !== 405 && status !== 500) throw e;
+    }
+
+    // 2) Fallback: tenant-scoped lists (admin's organization)
+    const tenantId = admin.tenant_id;
+    const [studentsRes, instructorsRes] = await Promise.all([
+      authAPI.listStudents({ limit: 500, tenant_id: tenantId }),
+      authAPI.listInstructors({ limit: 500, tenant_id: tenantId }),
+    ]);
+    const students = (normalizeUsersList(studentsRes) as Record<string, unknown>[]).filter(
+      (u) => String(u.role ?? 'student').toLowerCase() === 'student'
+    );
+    const instructors = (normalizeUsersList(instructorsRes) as Record<string, unknown>[]).filter(
+      (u) => String(u.role ?? 'instructor').toLowerCase() === 'instructor'
+    );
+    return {
+      students,
+      instructors,
+      studentCount: students.length,
+      instructorCount: instructors.length,
+      source: 'composed',
+    };
+  },
+
   getAllUsers: (params?: { page?: number; limit?: number; role?: string; search?: string }) => {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.append('page', params.page.toString());
