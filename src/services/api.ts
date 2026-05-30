@@ -725,7 +725,7 @@ export const authAPI = {
 
 // Course API functions
 export const courseAPI = {
-  getAllCourses: (params?: { page?: number; limit?: number; category?: string; search?: string; instructor_id?: number; is_active?: boolean; include_inactive?: boolean }) => {
+  getAllCourses: (params?: { page?: number; limit?: number; category?: string; search?: string; instructor_id?: number; is_active?: boolean; include_inactive?: boolean; tenant_id?: string | number }) => {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.append('page', params.page.toString());
     if (params?.limit) searchParams.append('limit', params.limit.toString());
@@ -734,6 +734,7 @@ export const courseAPI = {
     if (params?.instructor_id != null) searchParams.append('instructor_id', params.instructor_id.toString());
     if (params?.is_active !== undefined) searchParams.append('is_active', params.is_active.toString());
     if (params?.include_inactive !== undefined) searchParams.append('include_inactive', params.include_inactive.toString());
+    if (params?.tenant_id != null && params.tenant_id !== '') searchParams.append('tenant_id', String(params.tenant_id));
 
     return apiRequest(`/courses?${searchParams.toString()}`);
   },

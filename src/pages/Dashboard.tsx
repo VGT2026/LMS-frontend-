@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAssignments } from "@/contexts/AssignmentContext";
 import { dashboardAPI, courseAPI, authAPI, quizAPI } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { scopeRowsToTenant } from "@/utils/tenant";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
 const fadeUp = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
@@ -82,13 +83,15 @@ const Dashboard = () => {
 
         const [enrolledRes, publishedRes] = await Promise.all([
           dashboardAPI.getEnrolledCourses().catch(() => ({ data: [] })),
-          courseAPI.getAllCourses({ limit: 50, include_inactive: true }).catch(() => ({ data: [] })),
+          courseAPI.getAllCourses({ limit: 50, include_inactive: true, tenant_id: user?.tenantId }).catch(() => ({ data: [] })),
         ]);
         const enrolledList = Array.isArray(enrolledRes?.data) ? enrolledRes.data : (Array.isArray(enrolledRes) ? enrolledRes : []);
         const rawPublished = Array.isArray(publishedRes?.data) ? publishedRes.data
           : Array.isArray(publishedRes?.courses) ? publishedRes.courses
           : (Array.isArray(publishedRes) ? publishedRes : []);
-        const publishedList = (rawPublished || []).filter((c: any) => c && (c.approval_status === "approved" || !c.approval_status));
+        const approvedPublished = (rawPublished || []).filter((c: any) => c && (c.approval_status === "approved" || !c.approval_status));
+        // Safety net: only recommend courses from the student's organization.
+        const { rows: publishedList } = scopeRowsToTenant(approvedPublished, user?.tenantId, user?.tenantName);
         setEnrolledCourses(enrolledList || []);
         setAllCourses(publishedList);
         setUserCourses(publishedList.slice(0, 4));
@@ -107,8 +110,9 @@ const Dashboard = () => {
         const coursesList = Array.isArray(allCoursesRes?.data) ? allCoursesRes.data : [];
         setUserCourses(coursesList.slice(0, 4));
       } else {
-        const allCoursesRes = await courseAPI.getAllCourses({ limit: 8 });
-        const coursesList = Array.isArray(allCoursesRes?.data) ? allCoursesRes.data : [];
+        const allCoursesRes = await courseAPI.getAllCourses({ limit: 8, tenant_id: user?.tenantId });
+        const rawList = Array.isArray(allCoursesRes?.data) ? allCoursesRes.data : [];
+        const { rows: coursesList } = scopeRowsToTenant(rawList, user?.tenantId, user?.tenantName);
         setUserCourses(coursesList.slice(0, 4));
       }
     } catch (error) {

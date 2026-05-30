@@ -7,11 +7,14 @@ import { Search, Loader2, Lock } from "lucide-react";
 import { useState, useEffect } from "react";
 import { courseAPI, dashboardAPI } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { scopeRowsToTenant } from "@/utils/tenant";
 
 const DEFAULT_THUMBNAIL = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=250&fit=crop";
 
 const Courses = ({ view = "all" }: { view?: "all" | "my-enrolled" }) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [courses, setCourses] = useState<any[]>([]);
@@ -29,11 +32,14 @@ const Courses = ({ view = "all" }: { view?: "all" | "my-enrolled" }) => {
           setCourses(list);
         } else {
           const [allRes, enrolledRes] = await Promise.all([
-            courseAPI.getAllCourses({ limit: 100, include_inactive: true }),
+            courseAPI.getAllCourses({ limit: 100, include_inactive: true, tenant_id: user?.tenantId }),
             dashboardAPI.getEnrolledCourses().catch(() => ({ data: [] })),
           ]);
           const rawList = Array.isArray(allRes?.data) ? allRes.data : [];
-          const list = rawList.filter((c: any) => c.approval_status === "approved" || !c.approval_status);
+          const approved = rawList.filter((c: any) => c.approval_status === "approved" || !c.approval_status);
+          // Safety net: keep only courses in the user's organization, in case the
+          // backend hasn't applied tenant scoping to GET /courses yet.
+          const { rows: list } = scopeRowsToTenant(approved, user?.tenantId, user?.tenantName);
           const enrolled = Array.isArray(enrolledRes?.data) ? enrolledRes.data : [];
           setCourses(list);
           setEnrolledIds(new Set(enrolled.map((c: any) => Number(c.id)).filter(Boolean)));
@@ -45,7 +51,7 @@ const Courses = ({ view = "all" }: { view?: "all" | "my-enrolled" }) => {
       }
     };
     fetchCourses();
-  }, [view]);
+  }, [view, user?.tenantId, user?.tenantName]);
 
   const handleEnroll = async (e: React.MouseEvent, courseId: number) => {
     e.preventDefault();

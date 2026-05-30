@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { scopeRowsToTenant } from "@/utils/tenant";
 import {
   mapApiToCourse,
   loadStoredSelection,
@@ -34,6 +36,7 @@ const fadeUp = {
 const CareerRoadmap = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [courses, setCourses] = useState<RoadmapCourseItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -45,12 +48,18 @@ const CareerRoadmap = () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await courseAPI.getAllCourses({ limit: 100, include_inactive: true });
+      const res = await courseAPI.getAllCourses({ limit: 100, include_inactive: true, tenant_id: user?.tenantId });
       const list = Array.isArray(res?.data) ? res.data : [];
       const approved = list.filter(
         (c: { approval_status?: string }) => c.approval_status === "approved" || !c.approval_status
       );
-      const mapped = approved
+      // Safety net: only show courses from the user's organization.
+      const { rows: scoped } = scopeRowsToTenant(
+        approved as Record<string, unknown>[],
+        user?.tenantId,
+        user?.tenantName
+      );
+      const mapped = scoped
         .map((row: Record<string, unknown>) => mapApiToCourse(row))
         .filter((c): c is RoadmapCourseItem => c != null);
       setCourses(mapped);
@@ -69,7 +78,7 @@ const CareerRoadmap = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.tenantId, user?.tenantName]);
 
   useEffect(() => {
     void loadCourses();
