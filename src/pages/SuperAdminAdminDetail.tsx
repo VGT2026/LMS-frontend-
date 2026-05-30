@@ -148,6 +148,7 @@ const SuperAdminAdminDetail = () => {
   const [instructors, setInstructors] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [scopeWarning, setScopeWarning] = useState(false);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"students" | "instructors">("students");
 
@@ -178,16 +179,21 @@ const SuperAdminAdminDetail = () => {
         setAdmin(null);
         setStudents([]);
         setInstructors([]);
+        setScopeWarning(false);
         return;
       }
+      setScopeWarning(false);
       setAdmin(adminInfo);
 
       const overview = await authAPI.getAdminOverview({
         id: adminInfo.id,
         tenant_id: adminInfo.tenantId,
+        tenant_name: adminInfo.tenantName,
       });
       setStudents(overview.students.map(mapMember));
       setInstructors(overview.instructors.map(mapMember));
+      // Warn if we have a tenant but couldn't actually scope (rows lacked tenant info).
+      setScopeWarning(!!adminInfo.tenantId && !overview.scoped);
     } catch (error) {
       const msg =
         error instanceof Error
@@ -294,6 +300,18 @@ const SuperAdminAdminDetail = () => {
           <AlertDescription className="text-sm">
             This admin is not linked to a tenant, so members cannot be scoped to their organization. Add a
             tenant for this admin on the backend to see their students and instructors.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {admin && admin.tenantId && scopeWarning && !loadError && (
+        <Alert>
+          <AlertTitle>Showing unscoped results</AlertTitle>
+          <AlertDescription className="text-sm">
+            The API did not return tenant info on each user, so these lists could not be filtered to{" "}
+            {formatTenantLabel(admin.tenantName)} only. Ask the backend to include <code>tenant_id</code> on
+            student/instructor rows (or implement the per-admin overview endpoint) to differentiate members by
+            admin.
           </AlertDescription>
         </Alert>
       )}

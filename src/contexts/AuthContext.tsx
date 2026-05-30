@@ -37,7 +37,13 @@ const REMEMBER_KEY = "lms_remember";
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<{ success: boolean; message?: string; user?: User }>;
-  register: (name: string, email: string, password: string, confirmPassword: string) => Promise<{ success: boolean; message?: string; user?: User }>;
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    confirmPassword: string,
+    organization?: { tenantId?: string | number; tenantName?: string }
+  ) => Promise<{ success: boolean; message?: string; user?: User }>;
   sendPasswordResetEmail: (email: string) => Promise<{ success: boolean; message?: string }>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
@@ -368,12 +374,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const register = async (name: string, email: string, password: string, confirmPassword: string): Promise<{ success: boolean; message?: string; user?: User }> => {
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    confirmPassword: string,
+    organization?: { tenantId?: string | number; tenantName?: string }
+  ): Promise<{ success: boolean; message?: string; user?: User }> => {
     setAuthLoading(true);
     try {
       // Always register via API (MySQL). Server optionally mirrors to Firebase Admin — avoids
       // client calls to identitytoolkit signUp (400s when Email/Password or domains are misconfigured).
-      const response = await authAPI.register(name, email, password, confirmPassword);
+      const response = await authAPI.register(name, email, password, confirmPassword, {
+        tenant_id: organization?.tenantId,
+        tenant_name: organization?.tenantName,
+      });
       const data = response?.data ?? response;
       if (response?.success && data?.token && data?.user) {
         setAuthStorage(data.token, true);

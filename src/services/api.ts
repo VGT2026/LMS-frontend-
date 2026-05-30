@@ -245,11 +245,53 @@ export const authAPI = {
       body: JSON.stringify({ email, password }),
     }),
 
-  register: (name: string, email: string, password: string, confirmPassword: string) =>
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    confirmPassword: string,
+    options?: { tenant_id?: string | number; tenant_name?: string }
+  ) =>
     apiRequest('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password, confirmPassword }),
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+        confirmPassword,
+        ...(options?.tenant_id != null && options.tenant_id !== ''
+          ? { tenant_id: options.tenant_id }
+          : {}),
+        ...(options?.tenant_name?.trim() ? { tenant_name: options.tenant_name.trim() } : {}),
+      }),
     }),
+
+  /**
+   * Public list of organizations for the signup page (no auth required).
+   * Tries public routes first, then falls back to the superadmin tenants route.
+   * Returns [] if none are available so registration can still proceed.
+   */
+  listPublicOrganizations: async (): Promise<{ id: string; name: string }[]> => {
+    const endpoints = [
+      '/auth/organizations',
+      '/auth/tenants',
+      '/organizations',
+      '/auth/superadmin/tenants',
+    ];
+    for (const ep of endpoints) {
+      try {
+        const res = await apiRequest(ep);
+        const rows = normalizeTenantsList(res) as Record<string, unknown>[];
+        const orgs = rows
+          .map((r) => ({ id: String(r.id ?? ''), name: String(r.name ?? '').trim() }))
+          .filter((o) => o.id && o.name);
+        if (orgs.length) return orgs;
+      } catch {
+        // try the next candidate endpoint
+      }
+    }
+    return [];
+  },
 
   firebaseToken: (idToken: string, name?: string, password?: string) =>
     apiRequest('/auth/firebase', {
@@ -468,16 +510,21 @@ export const authAPI = {
   /**
    * Superadmin: overview for ONE admin — their organization's students + instructors.
    * Tries a dedicated endpoint first, then composes from tenant-scoped user lists.
+   * Always scopes results to the admin's tenant client-side (when user rows carry
+   * tenant info) so each admin shows ONLY their own organization's members — even
+   * if the backend ignores the tenant_id query param.
    */
   getAdminOverview: async (admin: {
     id: string | number;
     tenant_id?: string | number;
+    tenant_name?: string;
   }): Promise<{
     students: Record<string, unknown>[];
     instructors: Record<string, unknown>[];
     studentCount: number;
     instructorCount: number;
     source: 'endpoint' | 'composed';
+    scoped: boolean;
   }> => {
     const pickCount = (root: Record<string, unknown>, keys: string[]): number | undefined => {
       for (const k of keys) {
@@ -489,17 +536,58 @@ export const authAPI = {
       return undefined;
     };
 
+    const adminTenantId = admin.tenant_id != null && admin.tenant_id !== '' ? String(admin.tenant_id) : undefined;
+    const adminTenantName = admin.tenant_name?.trim().toLowerCase() || undefined;
+
+    const readUserTenant = (u: Record<string, unknown>): { id?: string; name?: string } => {
+      const nested =
+        u.tenant && typeof u.tenant === 'object' && !Array.isArray(u.tenant)
+          ? (u.tenant as Record<string, unknown>)
+          : undefined;
+      const id = u.tenant_id ?? u.tenantId ?? nested?.id;
+      const name = u.tenant_name ?? u.tenantName ?? nested?.name;
+      return {
+        id: id != null && id !== '' ? String(id) : undefined,
+        name: name != null ? String(name).trim().toLowerCase() : undefined,
+      };
+    };
+
+    /**
+     * Keep only users in the admin's tenant. Only filters when (a) we know the
+     * admin's tenant and (b) at least one row actually carries tenant info —
+     * otherwise we can't differentiate and return rows unchanged.
+     */
+    const scopeToTenant = (
+      rows: Record<string, unknown>[]
+    ): { rows: Record<string, unknown>[]; scoped: boolean } => {
+      if (!adminTenantId && !adminTenantName) return { rows, scoped: false };
+      const anyHasTenant = rows.some((r) => {
+        const t = readUserTenant(r);
+        return t.id || t.name;
+      });
+      if (!anyHasTenant) return { rows, scoped: false };
+      const filtered = rows.filter((r) => {
+        const t = readUserTenant(r);
+        if (adminTenantId && t.id) return t.id === adminTenantId;
+        if (adminTenantName && t.name) return t.name === adminTenantName;
+        return false;
+      });
+      return { rows: filtered, scoped: true };
+    };
+
     // 1) Dedicated endpoint (preferred): GET /auth/superadmin/admins/:id/overview
     try {
       const res = await apiRequest(`/auth/superadmin/admins/${admin.id}/overview`);
       const data = (res?.data ?? res) as Record<string, unknown>;
-      const students = normalizeUsersList(
-        (data.students as unknown) ?? data
-      ) as Record<string, unknown>[];
-      const instructors = normalizeUsersList(
-        (data.instructors as unknown) ?? []
-      ) as Record<string, unknown>[];
       if (Array.isArray(data.students) || Array.isArray(data.instructors) || data.counts) {
+        const studentsRaw = normalizeUsersList(
+          (data.students as unknown) ?? data
+        ) as Record<string, unknown>[];
+        const instructorsRaw = normalizeUsersList(
+          (data.instructors as unknown) ?? []
+        ) as Record<string, unknown>[];
+        const students = scopeToTenant(studentsRaw).rows;
+        const instructors = scopeToTenant(instructorsRaw).rows;
         return {
           students,
           instructors,
@@ -514,6 +602,7 @@ export const authAPI = {
               'totalInstructors',
             ]) ?? instructors.length,
           source: 'endpoint',
+          scoped: true,
         };
       }
     } catch (e) {
@@ -528,18 +617,21 @@ export const authAPI = {
       authAPI.listStudents({ limit: 500, tenant_id: tenantId }),
       authAPI.listInstructors({ limit: 500, tenant_id: tenantId }),
     ]);
-    const students = (normalizeUsersList(studentsRes) as Record<string, unknown>[]).filter(
+    const studentsByRole = (normalizeUsersList(studentsRes) as Record<string, unknown>[]).filter(
       (u) => String(u.role ?? 'student').toLowerCase() === 'student'
     );
-    const instructors = (normalizeUsersList(instructorsRes) as Record<string, unknown>[]).filter(
+    const instructorsByRole = (normalizeUsersList(instructorsRes) as Record<string, unknown>[]).filter(
       (u) => String(u.role ?? 'instructor').toLowerCase() === 'instructor'
     );
+    const scopedStudents = scopeToTenant(studentsByRole);
+    const scopedInstructors = scopeToTenant(instructorsByRole);
     return {
-      students,
-      instructors,
-      studentCount: students.length,
-      instructorCount: instructors.length,
+      students: scopedStudents.rows,
+      instructors: scopedInstructors.rows,
+      studentCount: scopedStudents.rows.length,
+      instructorCount: scopedInstructors.rows.length,
       source: 'composed',
+      scoped: scopedStudents.scoped || scopedInstructors.scoped,
     };
   },
 

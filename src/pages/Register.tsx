@@ -5,10 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GraduationCap, Eye, EyeOff, ArrowLeft, CheckCircle, Mail, User, Lock } from "lucide-react";
+import { GraduationCap, Eye, EyeOff, ArrowLeft, CheckCircle, Mail, User, Lock, Building2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { courseAPI } from "@/services/api";
+import { authAPI, courseAPI } from "@/services/api";
+import { getDisplayTenantName } from "@/utils/tenant";
+
+interface OrgOption {
+  id: string;
+  name: string;
+}
 
 const DEFAULT_CATEGORIES = [
   "Development", "Data Science", "Design", "Cloud",
@@ -22,8 +28,11 @@ const Register = () => {
     email: "",
     password: "",
     confirmPassword: "",
+    organizationId: "",
     preferredCategories: [] as string[]
   });
+  const [organizations, setOrganizations] = useState<OrgOption[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -32,6 +41,23 @@ const Register = () => {
   const [success, setSuccess] = useState(false);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchOrganizations = async () => {
+      setOrgsLoading(true);
+      try {
+        const list = await authAPI.listPublicOrganizations();
+        // Hide system placeholder tenants (e.g. "Platform Default") from the picker.
+        const visible = list.filter((o) => getDisplayTenantName(o.name));
+        setOrganizations(visible);
+      } catch {
+        setOrganizations([]);
+      } finally {
+        setOrgsLoading(false);
+      }
+    };
+    fetchOrganizations();
+  }, []);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -80,6 +106,11 @@ const Register = () => {
       return;
     }
 
+    if (organizations.length > 0 && !formData.organizationId) {
+      setError("Please select your organization");
+      return;
+    }
+
     if (!acceptTerms) {
       setError("Please accept the terms and conditions");
       return;
@@ -88,11 +119,13 @@ const Register = () => {
     setLoading(true);
 
     try {
+      const selectedOrg = organizations.find((o) => o.id === formData.organizationId);
       const result = await register(
         formData.name,
         formData.email,
         formData.password,
-        formData.confirmPassword
+        formData.confirmPassword,
+        selectedOrg ? { tenantId: selectedOrg.id, tenantName: selectedOrg.name } : undefined
       );
 
       if (result.success) {
@@ -208,6 +241,34 @@ const Register = () => {
                 />
               </div>
             </div>
+
+            {(orgsLoading || organizations.length > 0) && (
+              <div className="space-y-2">
+                <Label htmlFor="organization" className="text-foreground font-medium">Organization</Label>
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+                  <Select
+                    value={formData.organizationId}
+                    onValueChange={(value) => setFormData((prev) => ({ ...prev, organizationId: value }))}
+                    disabled={orgsLoading || organizations.length === 0}
+                  >
+                    <SelectTrigger id="organization" className="pl-9 h-11 bg-card">
+                      <SelectValue placeholder={orgsLoading ? "Loading organizations..." : "Select your organization"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {organizations.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>
+                          {org.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Choose the organization you belong to so your admin can manage your account.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="password" className="text-foreground font-medium">Password</Label>
