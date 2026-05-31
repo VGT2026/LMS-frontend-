@@ -7,6 +7,7 @@ import { Play, FileText, Download, CheckCircle, Circle, ArrowLeft, Clock, Users,
 import { courseAPI, enrollmentAPI, quizAPI } from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { getCourseThumbnail } from "@/utils/course";
 
 const DEFAULT_THUMBNAIL = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=250&fit=crop";
 
@@ -94,7 +95,7 @@ const CourseDetail = () => {
           description: d.description,
           category: d.category,
           instructor: d.instructor,
-          thumbnail: d.thumbnail || DEFAULT_THUMBNAIL,
+          thumbnail: getCourseThumbnail(d) || DEFAULT_THUMBNAIL,
           duration: d.duration,
           students: d.students ?? d.enrolledCount ?? 0,
           modules,

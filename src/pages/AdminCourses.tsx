@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { authAPI, courseAPI, normalizeCoursesList } from "@/services/api";
+import { getCourseThumbnail } from "@/utils/course";
 import { getDisplayTenantName } from "@/utils/tenant";
 import { BookOpen, Search, Users, TrendingUp, ToggleLeft, ToggleRight, UserCheck, Settings, Pencil, PlusCircle, XCircle } from "lucide-react";
 
@@ -197,7 +198,7 @@ const AdminCoursesPage = () => {
             description: course.description ?? "",
             category: course.category ?? "",
             instructorId: course.instructor_id?.toString() ?? "",
-            thumbnail: course.thumbnail ?? "",
+            thumbnail: getCourseThumbnail(course as unknown as Record<string, unknown>) ?? "",
         });
         setEditDialogOpen(true);
     };
@@ -306,7 +307,7 @@ const AdminCoursesPage = () => {
                                     <tr key={c.id} className="hover:bg-muted/20 transition-colors">
                                         <td className="px-5 py-3">
                                             <div className="flex items-center gap-3">
-                                                <img src={c.thumbnail || placeholderImg} alt="" className="w-10 h-10 rounded-lg object-cover bg-muted" />
+                                                <img src={getCourseThumbnail(c as unknown as Record<string, unknown>) || placeholderImg} alt="" className="w-10 h-10 rounded-lg object-cover bg-muted" />
                                                 <span className="text-sm font-medium text-foreground">{c.title}</span>
                                             </div>
                                         </td>

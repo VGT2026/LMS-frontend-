@@ -9,6 +9,7 @@ import { courseAPI, dashboardAPI } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { scopeRowsToTenant } from "@/utils/tenant";
+import { getCourseThumbnail } from "@/utils/course";
 
 const DEFAULT_THUMBNAIL = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=250&fit=crop";
 
@@ -147,7 +148,7 @@ const Courses = ({ view = "all" }: { view?: "all" | "my-enrolled" }) => {
                   {isDeactivated ? (
                     <div className="block cursor-not-allowed">
                       <div className="h-40 overflow-hidden relative">
-                        <img src={course.thumbnail || DEFAULT_THUMBNAIL} alt={course.title} className="w-full h-full object-cover" />
+                        <img src={getCourseThumbnail(course) || DEFAULT_THUMBNAIL} alt={course.title} className="w-full h-full object-cover" />
                         <div className="absolute top-3 right-3 px-2 py-1 rounded-md bg-muted text-xs font-semibold text-muted-foreground flex items-center gap-1">
                           <Lock className="w-3 h-3" /> Locked
                         </div>
@@ -177,7 +178,7 @@ const Courses = ({ view = "all" }: { view?: "all" | "my-enrolled" }) => {
                   ) : (
                   <Link to={`/course/${course.id}`} className="block">
                     <div className="h-40 overflow-hidden relative">
-                      <img src={course.thumbnail || DEFAULT_THUMBNAIL} alt={course.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <img src={getCourseThumbnail(course) || DEFAULT_THUMBNAIL} alt={course.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                       <div className="absolute top-3 right-3 px-2 py-1 rounded-md bg-card/90 backdrop-blur text-xs font-medium text-foreground">
                         {course.duration || "—"}
                       </div>

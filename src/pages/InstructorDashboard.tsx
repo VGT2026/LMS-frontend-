@@ -6,6 +6,7 @@ import { Users, BookOpen, ClipboardCheck, TrendingUp, ChevronRight, Clock, Calen
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import { assignmentAPI, courseAPI, dashboardAPI, quizAPI } from "@/services/api";
+import { getCourseThumbnail } from "@/utils/course";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
 const fadeUp = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
@@ -325,8 +326,8 @@ const InstructorDashboard = () => {
                                 <p className="text-sm text-muted-foreground">No active courses yet.</p>
                             ) : myCourses.slice(0, 5).map(course => (
                                 <Link key={course.id} to={`/instructor/course/${course.id}`} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
-                                    {course.thumbnail ? (
-                                        <img src={course.thumbnail} alt={course.title} className="w-10 h-10 rounded-lg object-cover" />
+                                    {getCourseThumbnail(course) ? (
+                                        <img src={getCourseThumbnail(course)} alt={course.title} className="w-10 h-10 rounded-lg object-cover" />
                                     ) : (
                                         <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                                             <BookOpen className="w-5 h-5 text-primary" />

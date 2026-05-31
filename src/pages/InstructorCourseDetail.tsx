@@ -12,6 +12,7 @@ import     {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { courseAPI, moduleAPI, uploadAPI, quizAPI, enrollmentAPI, announcementAPI } from "@/services/api";
+import { getCourseThumbnail } from "@/utils/course";
 
 const EDIT_WINDOW_DAYS = 15;
 
@@ -238,7 +239,7 @@ const InstructorCourseDetail = () => {
                     title: String(d.title ?? ""),
                     category: String(d.category ?? "Development"),
                     description: String(d.description ?? ""),
-                    thumbnail: String(d.thumbnail || DEFAULT_THUMBNAIL),
+                    thumbnail: getCourseThumbnail(d) || DEFAULT_THUMBNAIL,
                     status,
                     approval_status: d.approval_status || "pending",
                     created_at: d.created_at,

@@ -11,6 +11,7 @@ import { useAssignments } from "@/contexts/AssignmentContext";
 import { dashboardAPI, courseAPI, authAPI, quizAPI } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { scopeRowsToTenant } from "@/utils/tenant";
+import { getCourseThumbnail } from "@/utils/course";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
 const fadeUp = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
@@ -271,7 +272,7 @@ const Dashboard = () => {
                       <div className="bg-card rounded-xl overflow-hidden border border-border shadow-card hover:shadow-elevated transition-all duration-300">
                         <div className="h-32 overflow-hidden bg-muted relative">
                           <img
-                            src={course?.thumbnail || DEFAULT_COURSE_IMAGE}
+                            src={getCourseThumbnail(course) || DEFAULT_COURSE_IMAGE}
                             alt={course?.title || "Course"}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                             onError={(e) => {
@@ -329,7 +330,7 @@ const Dashboard = () => {
                             <div className="bg-card rounded-xl overflow-hidden border border-border shadow-card hover:shadow-elevated transition-all duration-300">
                               <div className="h-32 overflow-hidden bg-muted relative">
                                 <img
-                                  src={course?.thumbnail || DEFAULT_COURSE_IMAGE}
+                                  src={getCourseThumbnail(course) || DEFAULT_COURSE_IMAGE}
                                   alt={course?.title || "Course"}
                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                   onError={(e) => {
@@ -559,7 +560,7 @@ const Dashboard = () => {
               <div className="bg-card rounded-xl overflow-hidden border border-border shadow-card hover:shadow-elevated transition-all duration-300">
                 <div className="h-32 overflow-hidden bg-muted">
                   <img
-                    src={course?.thumbnail || DEFAULT_COURSE_IMAGE}
+                    src={getCourseThumbnail(course) || DEFAULT_COURSE_IMAGE}
                     alt={course?.title || "Course"}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     onError={(e) => {
@@ -664,7 +665,7 @@ const Dashboard = () => {
             <div key={course?.id ?? `ac-${idx}`} className="bg-card rounded-xl overflow-hidden border border-border shadow-card">
               <div className="h-32 overflow-hidden bg-muted">
                 <img
-                  src={course?.thumbnail || DEFAULT_COURSE_IMAGE}
+                  src={getCourseThumbnail(course) || DEFAULT_COURSE_IMAGE}
                   alt={course?.title || "Course"}
                   className="w-full h-full object-cover"
                   onError={(e) => {

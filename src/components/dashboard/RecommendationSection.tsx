@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Sparkles, ChevronRight, BookOpen } from "lucide-react";
 import { courses as mockCourses } from "@/data/mockData";
 import { User } from "@/contexts/AuthContext";
+import { getCourseThumbnail } from "@/utils/course";
 
 interface RecommendationSectionProps {
     user: User | null;
@@ -63,7 +64,7 @@ export const RecommendationSection = ({ user, courses: propCourses, enrolledCour
                         <div className="bg-card rounded-xl overflow-hidden border border-border shadow-card hover:shadow-elevated transition-all duration-300">
                             <div className="h-32 overflow-hidden bg-muted">
                                 <img
-                                    src={course?.thumbnail || DEFAULT_COURSE_IMAGE}
+                                    src={getCourseThumbnail(course) || DEFAULT_COURSE_IMAGE}
                                     alt={course?.title || "Course"}
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                     onError={(e) => {

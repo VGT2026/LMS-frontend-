@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Search, Users, Loader2, Globe } from "lucide-react";
 import { authAPI, courseAPI, moduleAPI, normalizeCoursesList } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { getCourseThumbnail } from "@/utils/course";
 
 const statusColors: Record<string, string> = {
     active: "bg-success/10 text-success",
@@ -74,7 +75,7 @@ const InstructorCourses = () => {
                             title: String(c.title ?? ""),
                             category: String(c.category ?? "Development"),
                             description: String(c.description ?? ""),
-                            thumbnail: (c.thumbnail as string) || DEFAULT_THUMBNAIL,
+                            thumbnail: getCourseThumbnail(c) || DEFAULT_THUMBNAIL,
                             studentCount: Number((c as { enrolled_count?: number }).enrolled_count ?? 0),
                             avgProgress: 0,
                             status: (c.is_active === true || c.is_active === 1 ? "active" : "draft") as "active" | "draft",

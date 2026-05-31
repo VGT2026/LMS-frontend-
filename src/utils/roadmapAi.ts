@@ -1,5 +1,7 @@
 /** Career roadmap AI helpers — API courses only (numeric DB ids). */
 
+import { getCourseThumbnail } from "@/utils/course";
+
 export interface RoadmapCourseItem {
   id: number;
   title: string;
@@ -31,7 +33,7 @@ export function mapApiToCourse(raw: Record<string, unknown>): RoadmapCourseItem 
     description: String(raw.description ?? "").trim() || "No description available.",
     category: raw.category != null ? String(raw.category) : undefined,
     duration: raw.duration != null ? String(raw.duration) : undefined,
-    thumbnail: raw.thumbnail != null ? String(raw.thumbnail) : undefined,
+    thumbnail: getCourseThumbnail(raw),
     level: raw.level != null ? String(raw.level) : undefined,
   };
 }
