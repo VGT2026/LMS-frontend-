@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,34 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { authAPI, courseAPI, normalizeCoursesList } from "@/services/api";
+import { authAPI, courseAPI, normalizeCoursesList, normalizeTenantsList } from "@/services/api";
 import { getCourseThumbnail } from "@/utils/course";
-import { getDisplayTenantName } from "@/utils/tenant";
-import { BookOpen, Search, Users, TrendingUp, ToggleLeft, ToggleRight, UserCheck, Settings, Pencil, PlusCircle, XCircle } from "lucide-react";
+import {
+  getDisplayTenantName,
+  scopeRowsToTenant,
+  groupRowsByOrganization,
+  formatTenantLabel,
+  getTenantKeyFromRow,
+} from "@/utils/tenant";
+import {
+  BookOpen,
+  Search,
+  Users,
+  TrendingUp,
+  ToggleLeft,
+  ToggleRight,
+  UserCheck,
+  Settings,
+  Pencil,
+  PlusCircle,
+  XCircle,
+  Building2,
+} from "lucide-react";
+
+interface OrgOption {
+    id: string;
+    name: string;
+}
 
 interface Instructor {
     id: number;
@@ -33,6 +57,37 @@ interface CourseRow {
     approval_status?: "pending" | "approved" | "rejected";
     students?: number;
     revenue?: number;
+    tenantId?: string;
+    organizationLabel: string;
+}
+
+function mapApiToCourseRow(raw: Record<string, unknown>): CourseRow {
+    const nested =
+        raw.tenant && typeof raw.tenant === "object" && !Array.isArray(raw.tenant)
+            ? (raw.tenant as Record<string, unknown>)
+            : undefined;
+    const rawOrgName = raw.tenant_name ?? raw.tenantName ?? nested?.name;
+    const { tenantId } = getTenantKeyFromRow(raw);
+    return {
+        id: Number(raw.id),
+        title: String(raw.title ?? ""),
+        description: raw.description != null ? String(raw.description) : undefined,
+        category: String(raw.category ?? ""),
+        instructor_id: raw.instructor_id != null ? Number(raw.instructor_id) : undefined,
+        instructor: raw.instructor != null ? String(raw.instructor) : undefined,
+        thumbnail: raw.thumbnail != null ? String(raw.thumbnail) : undefined,
+        is_active: raw.is_active === true || raw.is_active === 1,
+        approval_status: raw.approval_status as CourseRow["approval_status"],
+        students: raw.students != null ? Number(raw.students) : undefined,
+        revenue: raw.revenue != null ? Number(raw.revenue) : undefined,
+        tenantId,
+        organizationLabel: (() => {
+            const label = formatTenantLabel(rawOrgName != null ? String(rawOrgName) : undefined);
+            if (label !== "—") return label;
+            if (tenantId) return `Organization #${tenantId}`;
+            return "Unassigned";
+        })(),
+    };
 }
 
 const PREDEFINED_CATEGORIES = ["Development", "Data Science", "Design", "Business", "Security", "Cloud & DevOps"];
@@ -40,11 +95,14 @@ const PREDEFINED_CATEGORIES = ["Development", "Data Science", "Design", "Busines
 const AdminCoursesPage = () => {
     const { user } = useAuth();
     const { toast } = useToast();
+    const isSuperadmin = user?.role === "superadmin";
+    const orgName = getDisplayTenantName(user?.tenantName);
     const [coursesData, setCoursesData] = useState<CourseRow[]>([]);
     const [instructors, setInstructors] = useState<Instructor[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
+    const [orgFilter, setOrgFilter] = useState("all");
     const [assignmentDialogOpen, setAssignmentDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [selectedCourse, setSelectedCourse] = useState<CourseRow | null>(null);
@@ -55,13 +113,43 @@ const AdminCoursesPage = () => {
     const [customCategory, setCustomCategory] = useState("");
     const [categories, setCategories] = useState<string[]>(PREDEFINED_CATEGORIES);
     const [approvingCourseId, setApprovingCourseId] = useState<number | null>(null);
+    const [organizations, setOrganizations] = useState<OrgOption[]>([]);
 
-    const fetchCourses = async () => {
+    const showOrgColumn = isSuperadmin && orgFilter === "all";
+    const groupByOrganization = isSuperadmin && orgFilter === "all";
+    const colSpan = showOrgColumn ? 6 : 5;
+
+    const fetchCourses = useCallback(async () => {
         try {
             setLoading(true);
-            const response = await courseAPI.getAllCoursesWithRetries({ limit: 100 });
+            const params: {
+                limit: number;
+                include_inactive?: boolean;
+                tenant_id?: string | number;
+            } = { limit: 500, include_inactive: true };
+
+            if (isSuperadmin) {
+                if (orgFilter !== "all") params.tenant_id = orgFilter;
+            } else if (user?.tenantId) {
+                params.tenant_id = user.tenantId;
+            }
+
+            const response = await courseAPI.getAllCoursesWithRetries(params);
             const list = normalizeCoursesList(response);
-            setCoursesData(Array.isArray(list) ? (list as CourseRow[]) : []);
+            const mapped = Array.isArray(list)
+                ? (list as Record<string, unknown>[]).map(mapApiToCourseRow)
+                : [];
+
+            if (!isSuperadmin && user) {
+                const scoped = scopeRowsToTenant(
+                    mapped as unknown as Record<string, unknown>[],
+                    user.tenantId,
+                    user.tenantName
+                );
+                setCoursesData(scoped.rows.map((r) => mapApiToCourseRow(r)));
+            } else {
+                setCoursesData(mapped);
+            }
         } catch (error) {
             console.error("Failed to fetch courses:", error);
             const msg = error instanceof Error ? error.message : "Failed to load courses";
@@ -74,25 +162,72 @@ const AdminCoursesPage = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [isSuperadmin, orgFilter, user?.tenantId, user?.tenantName, toast]);
 
-    const fetchInstructors = async () => {
+    const fetchOrganizations = useCallback(async () => {
+        if (!isSuperadmin) {
+            setOrganizations([]);
+            return;
+        }
+        try {
+            const res = await authAPI.listTenants({ limit: 200 });
+            const rows = normalizeTenantsList(res) as Record<string, unknown>[];
+            setOrganizations(
+                rows.map((t) => ({
+                    id: String(t.id ?? ""),
+                    name: formatTenantLabel(String(t.name ?? "")) || String(t.name ?? "Organization"),
+                }))
+            );
+        } catch {
+            setOrganizations([]);
+        }
+    }, [isSuperadmin]);
+
+    const fetchInstructors = useCallback(async () => {
         try {
             const list = await authAPI.fetchInstructorsList();
-            const active = Array.isArray(list)
-                ? (list as Instructor[]).filter((i) => i && i.is_active !== false)
-                : [];
+            const raw = Array.isArray(list) ? (list as Record<string, unknown>[]) : [];
+            const scoped = isSuperadmin
+                ? raw
+                : scopeRowsToTenant(raw, user?.tenantId, user?.tenantName).rows;
+            const active = scoped
+                .map((i) => ({
+                    id: Number(i.id),
+                    name: String(i.name ?? ""),
+                    email: String(i.email ?? ""),
+                    is_active: i.is_active !== false && i.is_active !== 0,
+                }))
+                .filter((i) => i.id && i.is_active !== false) as Instructor[];
             setInstructors(active);
         } catch (error) {
             console.error("Failed to fetch instructors:", error);
             setInstructors([]);
         }
-    };
+    }, [isSuperadmin, user?.tenantId, user?.tenantName]);
 
     useEffect(() => {
-        fetchCourses();
-        fetchInstructors();
-    }, []);
+        void fetchOrganizations();
+    }, [fetchOrganizations]);
+
+    useEffect(() => {
+        void fetchCourses();
+        void fetchInstructors();
+    }, [fetchCourses, fetchInstructors]);
+
+    useEffect(() => {
+        if (!isSuperadmin || organizations.length > 0) return;
+        const fromCourses = new Map<string, string>();
+        for (const c of coursesData) {
+            if (c.tenantId && c.organizationLabel && c.organizationLabel !== "—") {
+                fromCourses.set(c.tenantId, c.organizationLabel);
+            }
+        }
+        if (fromCourses.size > 0) {
+            setOrganizations(
+                [...fromCourses.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+            );
+        }
+    }, [coursesData, isSuperadmin, organizations.length]);
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -112,12 +247,23 @@ const AdminCoursesPage = () => {
         fetchCategories();
     }, []);
 
-    const filtered = coursesData.filter((c) => {
-        const matchesSearch = c.title?.toLowerCase().includes(search.toLowerCase());
-        const status = c.is_active ? "active" : "inactive";
-        const matchesFilter = filter === "all" || status === filter;
-        return matchesSearch && matchesFilter;
-    });
+    const filtered = useMemo(() => {
+        return coursesData.filter((c) => {
+            const matchesSearch = c.title?.toLowerCase().includes(search.toLowerCase());
+            const status = c.is_active ? "active" : "inactive";
+            const matchesFilter = filter === "all" || status === filter;
+            return matchesSearch && matchesFilter;
+        });
+    }, [coursesData, search, filter]);
+
+    const coursesByOrganization = useMemo(
+        () =>
+            groupRowsByOrganization(
+                filtered as unknown as Record<string, unknown>[],
+                (row) => (row as unknown as CourseRow).organizationLabel
+            ),
+        [filtered]
+    );
 
     const toggleCourse = async (course: CourseRow) => {
         try {
@@ -233,15 +379,128 @@ const AdminCoursesPage = () => {
 
     const placeholderImg = "https://placehold.co/80x60?text=Course";
 
+    const renderCourseRow = (c: CourseRow) => (
+        <tr key={c.id} className="hover:bg-muted/20 transition-colors">
+            <td className="px-5 py-3">
+                <div className="flex items-center gap-3">
+                    <img
+                        src={getCourseThumbnail(c as unknown as Record<string, unknown>) || placeholderImg}
+                        alt=""
+                        className="w-10 h-10 rounded-lg object-cover bg-muted"
+                    />
+                    <span className="text-sm font-medium text-foreground">{c.title}</span>
+                </div>
+            </td>
+            <td className="px-5 py-3 text-sm text-muted-foreground">{c.category}</td>
+            <td className="px-5 py-3">
+                <div className="flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-foreground">{c.instructor || "Unassigned"}</span>
+                </div>
+            </td>
+            <td className="px-5 py-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                        className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${c.is_active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}
+                    >
+                        {c.is_active ? "active" : "inactive"}
+                    </span>
+                    {c.approval_status && (
+                        <span
+                            className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                                c.approval_status === "approved"
+                                    ? "bg-success/10 text-success"
+                                    : c.approval_status === "rejected"
+                                      ? "bg-destructive/10 text-destructive"
+                                      : "bg-warning/10 text-warning"
+                            }`}
+                        >
+                            {c.approval_status === "rejected"
+                                ? "Rejected"
+                                : c.approval_status === "approved"
+                                  ? "Approved"
+                                  : "Pending"}
+                        </span>
+                    )}
+                </div>
+            </td>
+            <td className="px-5 py-3 text-right">
+                <div className="flex items-center justify-end gap-1">
+                    {c.approval_status === "pending" && (
+                        <>
+                            <button
+                                onClick={() => handleApproveCourse(c.id, "approved")}
+                                disabled={approvingCourseId === c.id}
+                                className="text-success hover:text-success/80 p-1.5 rounded-lg hover:bg-success/10 transition-colors disabled:opacity-50"
+                                title="Approve course"
+                            >
+                                <UserCheck className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => handleApproveCourse(c.id, "rejected")}
+                                disabled={approvingCourseId === c.id}
+                                className="text-destructive hover:text-destructive/80 p-1.5 rounded-lg hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                                title="Reject course"
+                            >
+                                <XCircle className="w-4 h-4" />
+                            </button>
+                        </>
+                    )}
+                    <button
+                        onClick={() => openEditDialog(c)}
+                        className="text-muted-foreground hover:text-accent p-1.5 rounded-lg hover:bg-muted transition-colors"
+                        title="Edit course"
+                    >
+                        <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => openAssignmentDialog(c)}
+                        className="text-muted-foreground hover:text-accent p-1.5 rounded-lg hover:bg-muted transition-colors"
+                        title="Assign Instructor"
+                    >
+                        <Settings className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => toggleCourse(c)}
+                        className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-muted transition-colors"
+                        title="Toggle status"
+                    >
+                        {c.is_active ? (
+                            <ToggleRight className="w-4 h-4 text-success" />
+                        ) : (
+                            <ToggleLeft className="w-4 h-4" />
+                        )}
+                    </button>
+                </div>
+            </td>
+        </tr>
+    );
+
+    const tableHeader = (
+        <thead>
+            <tr className="border-b border-border bg-muted/30">
+                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Course</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Category</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Instructor</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Status</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Actions</th>
+            </tr>
+        </thead>
+    );
+
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Manage Courses</h1>
                     <p className="text-muted-foreground mt-1">
-                      {getDisplayTenantName(user?.tenantName)
-                        ? `${coursesData.length} courses in ${getDisplayTenantName(user?.tenantName)}`
-                        : `${coursesData.length} courses in your organization`}
+                      {isSuperadmin
+                        ? orgFilter === "all"
+                          ? `${filtered.length} courses across ${coursesByOrganization.length} organization(s)`
+                          : `${filtered.length} courses in ${organizations.find((o) => o.id === orgFilter)?.name ?? "selected organization"}`
+                        : orgName
+                          ? `${filtered.length} courses in ${orgName}`
+                          : `${filtered.length} courses in your organization`}
                     </p>
                 </div>
                 <Button asChild className="gap-1.5">
@@ -282,96 +541,88 @@ const AdminCoursesPage = () => {
                         <SelectItem value="inactive">Inactive</SelectItem>
                     </SelectContent>
                 </Select>
+                {isSuperadmin && organizations.length > 0 && (
+                    <Select value={orgFilter} onValueChange={setOrgFilter}>
+                        <SelectTrigger className="w-52">
+                            <SelectValue placeholder="Organization" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All organizations</SelectItem>
+                            {organizations.map((org) => (
+                                <SelectItem key={org.id} value={org.id}>
+                                    {org.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
             </div>
 
-            {/* Course table */}
-            <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b border-border bg-muted/30">
-                                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Course</th>
-                                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Category</th>
-                                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Instructor</th>
-                                <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Status</th>
-                                <th className="text-right px-5 py-3 text-xs font-semibold text-muted-foreground uppercase">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                            {loading ? (
-                                <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">Loading courses...</td></tr>
-                            ) : filtered.length === 0 ? (
-                                <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">No courses found</td></tr>
-                            ) : (
-                                filtered.map((c) => (
-                                    <tr key={c.id} className="hover:bg-muted/20 transition-colors">
-                                        <td className="px-5 py-3">
-                                            <div className="flex items-center gap-3">
-                                                <img src={getCourseThumbnail(c as unknown as Record<string, unknown>) || placeholderImg} alt="" className="w-10 h-10 rounded-lg object-cover bg-muted" />
-                                                <span className="text-sm font-medium text-foreground">{c.title}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-5 py-3 text-sm text-muted-foreground">{c.category}</td>
-                                        <td className="px-5 py-3">
-                                            <div className="flex items-center gap-2">
-                                                <UserCheck className="w-4 h-4 text-muted-foreground" />
-                                                <span className="text-sm text-foreground">{c.instructor || "Unassigned"}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-5 py-3">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${c.is_active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>{c.is_active ? "active" : "inactive"}</span>
-                                                {c.approval_status && (
-                                                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                                                        c.approval_status === "approved" ? "bg-success/10 text-success" :
-                                                        c.approval_status === "rejected" ? "bg-destructive/10 text-destructive" :
-                                                        "bg-warning/10 text-warning"
-                                                    }`}>
-                                                        {c.approval_status === "rejected" ? "Rejected" : c.approval_status === "approved" ? "Approved" : "Pending"}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-5 py-3 text-right">
-                                            <div className="flex items-center justify-end gap-1">
-                                                {c.approval_status === "pending" && (
-                                                    <>
-                                                        <button 
-                                                            onClick={() => handleApproveCourse(c.id, 'approved')} 
-                                                            disabled={approvingCourseId === c.id}
-                                                            className="text-success hover:text-success/80 p-1.5 rounded-lg hover:bg-success/10 transition-colors disabled:opacity-50" 
-                                                            title="Approve course"
-                                                        >
-                                                            <UserCheck className="w-4 h-4" />
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => handleApproveCourse(c.id, 'rejected')} 
-                                                            disabled={approvingCourseId === c.id}
-                                                            className="text-destructive hover:text-destructive/80 p-1.5 rounded-lg hover:bg-destructive/10 transition-colors disabled:opacity-50" 
-                                                            title="Reject course"
-                                                        >
-                                                            <XCircle className="w-4 h-4" />
-                                                        </button>
-                                                    </>
-                                                )}
-                                                <button onClick={() => openEditDialog(c)} className="text-muted-foreground hover:text-accent p-1.5 rounded-lg hover:bg-muted transition-colors" title="Edit course">
-                                                    <Pencil className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => openAssignmentDialog(c)} className="text-muted-foreground hover:text-accent p-1.5 rounded-lg hover:bg-muted transition-colors" title="Assign Instructor">
-                                                    <Settings className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => toggleCourse(c)} className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-muted transition-colors" title="Toggle status">
-                                                    {c.is_active ? <ToggleRight className="w-4 h-4 text-success" /> : <ToggleLeft className="w-4 h-4" />}
-                                                </button>
-                                            </div>
+            {showGroupedByOrg ? (
+                <div className="space-y-6">
+                    {loading ? (
+                        <div className="bg-card rounded-xl border border-border p-8 text-center text-muted-foreground">
+                            Loading courses…
+                        </div>
+                    ) : coursesByOrganization.length === 0 ? (
+                        <div className="bg-card rounded-xl border border-border p-8 text-center text-muted-foreground">
+                            No courses found
+                        </div>
+                    ) : (
+                        coursesByOrganization.map((group) => (
+                            <div
+                                key={group.key}
+                                className="bg-card rounded-xl border border-border shadow-card overflow-hidden"
+                            >
+                                <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
+                                    <Building2 className="w-4 h-4 text-primary" />
+                                    <h2 className="text-sm font-semibold text-foreground">
+                                        {group.label}
+                                    </h2>
+                                    <span className="text-xs text-muted-foreground">
+                                        ({group.rows.length} course{group.rows.length === 1 ? "" : "s"})
+                                    </span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        {tableHeader}
+                                        <tbody className="divide-y divide-border">
+                                            {(group.rows as unknown as CourseRow[]).map((c) =>
+                                                renderCourseRow(c)
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            ) : (
+                <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            {tableHeader}
+                            <tbody className="divide-y divide-border">
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={colSpan} className="px-5 py-8 text-center text-muted-foreground">
+                                            Loading courses…
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                ) : filtered.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={colSpan} className="px-5 py-8 text-center text-muted-foreground">
+                                            No courses found
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filtered.map((c) => renderCourseRow(c))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Assign Instructor Dialog */}
             <Dialog open={assignmentDialogOpen} onOpenChange={setAssignmentDialogOpen}>
