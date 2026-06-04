@@ -537,6 +537,9 @@ export const authAPI = {
     );
   },
 
+  /** Superadmin: platform-wide stats (GET /auth/superadmin/stats) */
+  getSuperadminStats: () => apiRequest("/auth/superadmin/stats"),
+
   /** Superadmin: list platform admin users */
   listAdmins: (params?: { page?: number; limit?: number; search?: string }) => {
     const searchParams = new URLSearchParams();
@@ -1291,6 +1294,186 @@ export const dashboardAPI = {
       const msg = e instanceof Error ? e.message : "Failed to load admin statistics";
       return { stats: { totalUsers: 0, activeUsers: 0, totalCourses: 0, activeCourses: 0 }, error: msg };
     }
+  },
+};
+
+export type SuperAdminPlatformStats = {
+  totalTenants: number;
+  platformAdmins: number;
+  students: number;
+  instructors: number;
+  totalUsers: number;
+  totalCourses: number;
+  activeCourses: number;
+  openIncidents: number;
+};
+
+function countActiveCourses(courses: unknown[]): number {
+  return courses.filter((c) => {
+    if (!c || typeof c !== "object") return false;
+    const row = c as Record<string, unknown>;
+    return row.is_active === true || row.is_active === 1 || row.status === "active";
+  }).length;
+}
+
+/** Superadmin dashboard: dedicated stats route, then aggregate from list endpoints. */
+export const superAdminAPI = {
+  getPlatformStats: async (): Promise<{
+    stats: SuperAdminPlatformStats | null;
+    warnings: string[];
+  }> => {
+    const warnings: string[] = [];
+
+    try {
+      const res = await apiRequest("/auth/superadmin/stats");
+      const data = (res?.data ?? res) as Record<string, unknown>;
+      if (data && typeof data === "object") {
+        const students = Number(data.students ?? data.total_students ?? 0);
+        const instructors = Number(data.instructors ?? data.total_instructors ?? 0);
+        const platformAdmins = Number(data.platformAdmins ?? data.platform_admins ?? data.admins ?? 0);
+        const totalTenants = Number(data.totalTenants ?? data.total_tenants ?? data.tenants ?? 0);
+        const totalUsers = Number(
+          data.totalUsers ??
+            data.total_users ??
+            students + instructors + platformAdmins
+        );
+        return {
+          stats: {
+            totalTenants,
+            platformAdmins,
+            students,
+            instructors,
+            totalUsers,
+            totalCourses: Number(data.totalCourses ?? data.total_courses ?? data.activeCourses ?? 0),
+            activeCourses: Number(data.activeCourses ?? data.active_courses ?? 0),
+            openIncidents: Number(data.openIncidents ?? data.open_incidents ?? 0),
+          },
+          warnings: [],
+        };
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Stats endpoint unavailable";
+      warnings.push(`GET /auth/superadmin/stats: ${formatApiErrorMessage(msg, readHttpStatus(e))}`);
+    }
+
+    const fetchSupportTickets = async () => {
+      try {
+        const res = await apiRequest("/support/tickets?limit=50");
+        return normalizeTicketsPayload(res).slice(0, 50);
+      } catch (e) {
+        const status = readHttpStatus(e);
+        if (status === 404 || status === 405) {
+          const res = await apiRequest("/support/issues?limit=50");
+          return normalizeTicketsPayload(res).slice(0, 50);
+        }
+        throw e;
+      }
+    };
+
+    const [tenantsR, adminsR, studentsR, instructorsR, coursesR, ticketsR] = await Promise.allSettled([
+      authAPI.listTenants({ limit: 500 }),
+      authAPI.listAdmins({ limit: 500 }),
+      authAPI.listStudents({ limit: 500 }),
+      authAPI.listInstructors({ limit: 500 }),
+      courseAPI.getAllCourses({ limit: 500, include_inactive: true }),
+      fetchSupportTickets(),
+    ]);
+
+    let totalTenants = 0;
+    if (tenantsR.status === "fulfilled") {
+      totalTenants = normalizeTenantsList(tenantsR.value).length;
+    } else {
+      warnings.push(
+        `Organizations (GET /auth/superadmin/tenants): ${
+          tenantsR.reason instanceof Error ? tenantsR.reason.message : "failed"
+        }`
+      );
+    }
+
+    let platformAdmins = 0;
+    if (adminsR.status === "fulfilled") {
+      const rows = normalizeUsersList(adminsR.value) as Record<string, unknown>[];
+      platformAdmins = rows.filter((u) => String(u.role ?? "").toLowerCase() === "admin").length || rows.length;
+    } else {
+      warnings.push(
+        `Platform admins (GET /auth/superadmin/admins): ${
+          adminsR.reason instanceof Error ? adminsR.reason.message : "failed"
+        }`
+      );
+    }
+
+    let students = 0;
+    if (studentsR.status === "fulfilled") {
+      students = normalizeUsersList(studentsR.value).length;
+    } else {
+      warnings.push(
+        `Students (GET /auth/superadmin/students): ${
+          studentsR.reason instanceof Error ? studentsR.reason.message : "failed"
+        }`
+      );
+    }
+
+    let instructors = 0;
+    if (instructorsR.status === "fulfilled") {
+      instructors = normalizeUsersList(instructorsR.value).length;
+    } else {
+      warnings.push(
+        `Instructors (GET /auth/superadmin/instructors): ${
+          instructorsR.reason instanceof Error ? instructorsR.reason.message : "failed"
+        }`
+      );
+    }
+
+    let totalCourses = 0;
+    let activeCourses = 0;
+    if (coursesR.status === "fulfilled") {
+      const list = normalizeCoursesList(coursesR.value);
+      totalCourses = list.length;
+      activeCourses = countActiveCourses(list);
+    } else {
+      warnings.push(
+        `Courses (GET /courses): ${
+          coursesR.reason instanceof Error ? coursesR.reason.message : "failed"
+        }`
+      );
+    }
+
+    let openIncidents = 0;
+    if (ticketsR.status === "fulfilled") {
+      openIncidents = Array.isArray(ticketsR.value) ? ticketsR.value.length : 0;
+    } else {
+      warnings.push(
+        `Support (GET /support/tickets): ${
+          ticketsR.reason instanceof Error ? ticketsR.reason.message : "failed"
+        }`
+      );
+    }
+
+    const totalUsers = students + instructors + platformAdmins;
+    const allFailed =
+      tenantsR.status === "rejected" &&
+      adminsR.status === "rejected" &&
+      studentsR.status === "rejected" &&
+      instructorsR.status === "rejected" &&
+      coursesR.status === "rejected";
+
+    if (allFailed) {
+      return { stats: null, warnings };
+    }
+
+    return {
+      stats: {
+        totalTenants,
+        platformAdmins,
+        students,
+        instructors,
+        totalUsers,
+        totalCourses,
+        activeCourses,
+        openIncidents,
+      },
+      warnings,
+    };
   },
 };
 
