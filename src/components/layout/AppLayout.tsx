@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { ApiStatusBanner } from "@/components/ApiStatusBanner";
 
 interface NavItem {
   label: string;
@@ -447,6 +448,7 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
 
         {/* Page Content */}
         <main className="flex-1 min-h-0 p-4 lg:p-6 overflow-y-auto" onClick={() => { setProfileOpen(false); setNotifOpen(false); }}>
+          <ApiStatusBanner />
           {children}
         </main>
       </div>

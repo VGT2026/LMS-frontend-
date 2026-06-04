@@ -1,4 +1,4 @@
-import { initializeApp, getApps, FirebaseApp } from "firebase/app";
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
 
 const firebaseConfig = {
@@ -11,13 +11,15 @@ const firebaseConfig = {
 };
 
 let auth: Auth | null = null;
-let app: FirebaseApp | null = null;
 
 if (firebaseConfig.apiKey && firebaseConfig.projectId) {
-  if (getApps().length === 0) {
-    app = initializeApp(firebaseConfig);
+  try {
+    const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    auth = getAuth(app);
+  } catch (err) {
+    console.error("[Firebase] Failed to initialize auth:", err);
+    auth = null;
   }
-  auth = getAuth(app || undefined);
 }
 
 export { auth };

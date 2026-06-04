@@ -28,6 +28,46 @@ export function resolveApiBaseUrl(): string {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 
+/** Quick connectivity check — used to warn when Railway/backend routes are missing. */
+export async function probeApiConnection(): Promise<{
+  ok: boolean;
+  status?: number;
+  message: string;
+}> {
+  const url = `${API_BASE_URL}/auth/login`;
+  try {
+    const res = await fetch(url, {
+      method: "OPTIONS",
+      headers: { Accept: "application/json" },
+    }).catch(() =>
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ email: "__probe__@invalid.local", password: "__probe__" }),
+      }),
+    );
+    const status = res.status;
+    if (status === 404) {
+      const body = await res.json().catch(() => ({}));
+      const path = typeof body.path === "string" ? body.path : url;
+      return {
+        ok: false,
+        status,
+        message: `API route not found (${path}). Deploy the LMS backend with routes under /api.`,
+      };
+    }
+    if (status >= 500) {
+      return { ok: false, status, message: `API server error (${status}). Check Railway logs.` };
+    }
+    return { ok: true, status, message: "API reachable" };
+  } catch {
+    return {
+      ok: false,
+      message: `Cannot reach API at ${API_BASE_URL}. Check VITE_API_URL and that the backend is running.`,
+    };
+  }
+}
+
 // Helper function to get auth token (checks both localStorage and sessionStorage for Remember me)
 const getAuthToken = (): string | null => {
   try {
