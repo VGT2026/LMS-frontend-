@@ -36,6 +36,12 @@ const roleMeta: Record<
     icon: Shield,
     badgeClass: "bg-warning/10 text-warning",
   },
+  superadmin: {
+    label: "Super Admin",
+    description: "Platform-wide account settings. Manage tenants and admins from Super Admin.",
+    icon: Shield,
+    badgeClass: "bg-destructive/10 text-destructive",
+  },
 };
 
 function getNotifLabels(role: UserRole | undefined): { key: NotifKey; label: string }[] {
@@ -137,7 +143,7 @@ const Settings = () => {
   }, [applyProfile, updateUser, user?.id]);
 
   const notifItems = useMemo(() => getNotifLabels(role), [role]);
-  const meta = role ? roleMeta[role] : roleMeta.student;
+  const meta = (role && roleMeta[role]) ?? roleMeta.student;
 
   const handleSave = async () => {
     const trimmed = name.trim();
