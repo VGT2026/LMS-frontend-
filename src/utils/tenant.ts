@@ -88,3 +88,39 @@ export function scopeRowsToTenant<T extends Record<string, unknown>>(
   });
   return { rows: scoped, filtered: true, tenantDataPresent: true };
 }
+
+export type OrganizationGroup<T> = {
+  key: string;
+  label: string;
+  rows: T[];
+};
+
+/** Group API rows by organization for admin tables (courses, users, etc.). */
+export function groupRowsByOrganization<T extends Record<string, unknown>>(
+  rows: T[],
+  getLabel?: (row: T) => string | undefined
+): OrganizationGroup<T>[] {
+  const map = new Map<string, OrganizationGroup<T>>();
+
+  for (const row of rows) {
+    const { tenantId, tenantName } = getTenantKeyFromRow(row);
+    const custom = getLabel?.(row);
+    const nested =
+      row.tenant && typeof row.tenant === "object" && !Array.isArray(row.tenant)
+        ? (row.tenant as Record<string, unknown>)
+        : undefined;
+    const rawName = row.tenant_name ?? row.tenantName ?? nested?.name;
+    const displayName = getDisplayTenantName(rawName != null ? String(rawName) : undefined);
+    const key = tenantId ?? tenantName ?? "__none__";
+    const label =
+      custom ?? displayName ?? (tenantId ? `Organization #${tenantId}` : "Unassigned");
+    const existing = map.get(key);
+    if (existing) {
+      existing.rows.push(row);
+    } else {
+      map.set(key, { key, label, rows: [row] });
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+}

@@ -8,7 +8,6 @@ import {
   BookOpen,
   AlertTriangle,
   ChevronRight,
-  Server,
   GraduationCap,
   FileText,
 } from "lucide-react";
@@ -243,18 +242,6 @@ const SuperAdminDashboard = () => {
             </p>
           </div>
         </div>
-      </motion.div>
-
-      <motion.div variants={fadeUp} className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
-        <Server className="w-5 h-5 text-success shrink-0" />
-        <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-success">API connected</span>
-          {stats && !loading
-            ? ` — ${stats.activeUsers.toLocaleString()} active users, ${stats.totalCourses} total courses.`
-            : loading
-              ? " — loading platform metrics…"
-              : " — stats unavailable."}
-        </p>
       </motion.div>
 
       {tenantChartData.length > 0 && (

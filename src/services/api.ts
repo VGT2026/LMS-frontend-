@@ -794,6 +794,7 @@ export const courseAPI = {
     instructor_id?: number;
     is_active?: boolean;
     include_inactive?: boolean;
+    tenant_id?: string | number;
   }) => {
     const p = params ?? {};
     try {
