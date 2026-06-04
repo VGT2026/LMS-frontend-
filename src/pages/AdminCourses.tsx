@@ -115,6 +115,7 @@ const AdminCoursesPage = () => {
     const [approvingCourseId, setApprovingCourseId] = useState<number | null>(null);
     const [organizations, setOrganizations] = useState<OrgOption[]>([]);
 
+    /** Superadmin + "All organizations" → section per org (must match JSX below). */
     const showGroupedByOrg = isSuperadmin && orgFilter === "all";
     const colSpan = 5;
 
