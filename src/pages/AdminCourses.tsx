@@ -115,9 +115,8 @@ const AdminCoursesPage = () => {
     const [approvingCourseId, setApprovingCourseId] = useState<number | null>(null);
     const [organizations, setOrganizations] = useState<OrgOption[]>([]);
 
-    const showOrgColumn = isSuperadmin && orgFilter === "all";
-    const groupByOrganization = isSuperadmin && orgFilter === "all";
-    const colSpan = showOrgColumn ? 6 : 5;
+    const showGroupedByOrg = isSuperadmin && orgFilter === "all";
+    const colSpan = 5;
 
     const fetchCourses = useCallback(async () => {
         try {
