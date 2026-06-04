@@ -124,3 +124,78 @@ export function groupRowsByOrganization<T extends Record<string, unknown>>(
 
   return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
 }
+
+type InstructorTenantRef = {
+  id: number;
+  tenantId?: string;
+  organizationLabel?: string;
+};
+
+/** When API omits tenant on course rows, infer from the assigned instructor. */
+export function enrichCoursesWithInstructorTenant<T extends Record<string, unknown>>(
+  courses: T[],
+  instructors: InstructorTenantRef[]
+): T[] {
+  const byId = new Map(instructors.map((i) => [i.id, i]));
+  return courses.map((course) => {
+    const row = course as Record<string, unknown> & {
+      instructor_id?: number;
+      tenantId?: string;
+      organizationLabel?: string;
+    };
+    if (row.tenantId) return course;
+    const instructorId =
+      row.instructor_id != null
+        ? Number(row.instructor_id)
+        : row.instructorId != null
+          ? Number(row.instructorId)
+          : undefined;
+    if (instructorId == null || Number.isNaN(instructorId)) return course;
+    const inst = byId.get(instructorId);
+    if (!inst?.tenantId) return course;
+    return {
+      ...course,
+      tenantId: inst.tenantId,
+      tenant_name: inst.organizationLabel,
+      organizationLabel: inst.organizationLabel,
+    } as T;
+  });
+}
+
+/**
+ * Admin course list: only courses in the viewer's organization.
+ * Uses tenant on course rows, then instructor tenant, then instructor id membership.
+ */
+export function filterCoursesForOrgViewer<T extends Record<string, unknown>>(
+  courses: T[],
+  instructors: InstructorTenantRef[],
+  options: {
+    isSuperadmin: boolean;
+    viewerTenantId?: string;
+    viewerTenantName?: string;
+    selectedTenantId?: string;
+  }
+): T[] {
+  const enriched = enrichCoursesWithInstructorTenant(courses, instructors);
+
+  if (options.isSuperadmin) {
+    if (options.selectedTenantId && options.selectedTenantId !== "all") {
+      const want = String(options.selectedTenantId);
+      return enriched.filter((c) => {
+        const { tenantId } = getTenantKeyFromRow(c);
+        return tenantId === want;
+      });
+    }
+    return enriched;
+  }
+
+  const { rows, filtered } = scopeRowsToTenant(
+    enriched,
+    options.viewerTenantId,
+    options.viewerTenantName
+  );
+  if (filtered) return rows;
+
+  // Trust API + enrichCoursesWithInstructorTenant (do not limit to instructor id list only)
+  return enriched;
+}
