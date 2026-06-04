@@ -7,42 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
-import { CheckCircle, LayoutDashboard, Users, BookOpen, GraduationCap, Shield, Eye, EyeOff } from "lucide-react";
+import { CheckCircle, LayoutDashboard, Users, BookOpen, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { authAPI } from "@/services/api";
 import type { UserRole } from "@/contexts/AuthContext";
+import { getRoleMeta } from "@/utils/roleMeta";
 
 type NotifKey = "email" | "push" | "courseUpdates" | "assignmentReminders" | "discussionReplies";
-
-const roleMeta: Record<
-  UserRole,
-  { label: string; description: string; icon: typeof Shield; badgeClass: string }
-> = {
-  student: {
-    label: "Student",
-    description: "Learning preferences, profile, and notifications for your courses.",
-    icon: GraduationCap,
-    badgeClass: "bg-primary/10 text-primary",
-  },
-  instructor: {
-    label: "Instructor",
-    description: "Teaching profile, password, and alerts for your classes and students.",
-    icon: BookOpen,
-    badgeClass: "bg-accent/10 text-accent",
-  },
-  admin: {
-    label: "Administrator",
-    description: "Platform account settings. User management stays under Admin → Users.",
-    icon: Shield,
-    badgeClass: "bg-warning/10 text-warning",
-  },
-  superadmin: {
-    label: "Super Admin",
-    description: "Platform-wide account settings. Manage tenants and admins from Super Admin.",
-    icon: Shield,
-    badgeClass: "bg-destructive/10 text-destructive",
-  },
-};
 
 function getNotifLabels(role: UserRole | undefined): { key: NotifKey; label: string }[] {
   if (role === "admin" || role === "superadmin") {
@@ -143,7 +114,8 @@ const Settings = () => {
   }, [applyProfile, updateUser, user?.id]);
 
   const notifItems = useMemo(() => getNotifLabels(role), [role]);
-  const meta = (role && roleMeta[role]) ?? roleMeta.student;
+  const meta = getRoleMeta(role);
+  const RoleIcon = meta.icon;
 
   const handleSave = async () => {
     const trimmed = name.trim();
@@ -219,7 +191,7 @@ const Settings = () => {
         <h1 className="text-2xl font-bold text-foreground">Settings</h1>
         <div className="flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${meta.badgeClass}`}>
-            <meta.icon className="w-3.5 h-3.5" />
+            <RoleIcon className="w-3.5 h-3.5" />
             {meta.label}
           </span>
           <p className="text-sm text-muted-foreground w-full sm:w-auto">{meta.description}</p>
