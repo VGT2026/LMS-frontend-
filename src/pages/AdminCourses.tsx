@@ -13,10 +13,12 @@ import { authAPI, courseAPI, normalizeCoursesList, normalizeTenantsList } from "
 import { getCourseThumbnail } from "@/utils/course";
 import {
   getDisplayTenantName,
-  scopeRowsToTenant,
   groupRowsByOrganization,
   formatTenantLabel,
   getTenantKeyFromRow,
+  parseTenantFromApiUser,
+  scopeRowsToTenant,
+  filterCoursesForOrgViewer,
 } from "@/utils/tenant";
 import {
   BookOpen,
@@ -43,6 +45,8 @@ interface Instructor {
     name: string;
     email: string;
     is_active?: boolean;
+    tenantId?: string;
+    organizationLabel?: string;
 }
 
 interface CourseRow {
@@ -119,50 +123,75 @@ const AdminCoursesPage = () => {
     const showGroupedByOrg = isSuperadmin && orgFilter === "all";
     const colSpan = 5;
 
-    const fetchCourses = useCallback(async () => {
+    const loadInstructors = useCallback(async (): Promise<Instructor[]> => {
         try {
-            setLoading(true);
-            const params: {
-                limit: number;
-                include_inactive?: boolean;
-                tenant_id?: string | number;
-            } = { limit: 500, include_inactive: true };
-
-            if (isSuperadmin) {
-                if (orgFilter !== "all") params.tenant_id = orgFilter;
-            } else if (user?.tenantId) {
-                params.tenant_id = user.tenantId;
-            }
-
-            const response = await courseAPI.getAllCoursesWithRetries(params);
-            const list = normalizeCoursesList(response);
-            const mapped = Array.isArray(list)
-                ? (list as Record<string, unknown>[]).map(mapApiToCourseRow)
-                : [];
-
-            if (!isSuperadmin && user) {
-                const scoped = scopeRowsToTenant(
-                    mapped as unknown as Record<string, unknown>[],
-                    user.tenantId,
-                    user.tenantName
-                );
-                setCoursesData(scoped.rows.map((r) => mapApiToCourseRow(r)));
-            } else {
-                setCoursesData(mapped);
-            }
-        } catch (error) {
-            console.error("Failed to fetch courses:", error);
-            const msg = error instanceof Error ? error.message : "Failed to load courses";
-            toast({
-                title: "Could not load courses",
-                description: msg,
-                variant: "destructive",
-            });
-            setCoursesData([]);
-        } finally {
-            setLoading(false);
+            const list = await authAPI.fetchInstructorsList();
+            const raw = Array.isArray(list) ? (list as Record<string, unknown>[]) : [];
+            const rows = isSuperadmin
+                ? raw
+                : scopeRowsToTenant(raw, user?.tenantId, user?.tenantName).rows;
+            return rows
+                .map((i) => {
+                    const tenant = parseTenantFromApiUser(i);
+                    const rawOrg = i.tenant_name ?? i.tenantName;
+                    const orgLabel = formatTenantLabel(rawOrg != null ? String(rawOrg) : undefined);
+                    return {
+                        id: Number(i.id),
+                        name: String(i.name ?? ""),
+                        email: String(i.email ?? ""),
+                        is_active: i.is_active !== false && i.is_active !== 0,
+                        tenantId: tenant.tenantId,
+                        organizationLabel:
+                            orgLabel !== "—" ? orgLabel : tenant.tenantName,
+                    };
+                })
+                .filter((i) => i.id && i.is_active !== false) as Instructor[];
+        } catch {
+            return [];
         }
-    }, [isSuperadmin, orgFilter, user?.tenantId, user?.tenantName, toast]);
+    }, [isSuperadmin, user?.tenantId, user?.tenantName]);
+
+    const fetchCourses = useCallback(
+        async (instructorList: Instructor[]) => {
+            try {
+                setLoading(true);
+                const params: {
+                    limit: number;
+                    include_inactive?: boolean;
+                    tenant_id?: string | number;
+                } = { limit: 500, include_inactive: true };
+
+                if (isSuperadmin) {
+                    if (orgFilter !== "all") params.tenant_id = orgFilter;
+                } else if (user?.tenantId) {
+                    params.tenant_id = user.tenantId;
+                }
+
+                const response = await courseAPI.getAllCoursesWithRetries(params);
+                const list = normalizeCoursesList(response);
+                const raw = Array.isArray(list) ? (list as Record<string, unknown>[]) : [];
+                const filtered = filterCoursesForOrgViewer(raw, instructorList, {
+                    isSuperadmin,
+                    viewerTenantId: user?.tenantId,
+                    viewerTenantName: user?.tenantName,
+                    selectedTenantId: orgFilter,
+                });
+                setCoursesData(filtered.map((r) => mapApiToCourseRow(r)));
+            } catch (error) {
+                console.error("Failed to fetch courses:", error);
+                const msg = error instanceof Error ? error.message : "Failed to load courses";
+                toast({
+                    title: "Could not load courses",
+                    description: msg,
+                    variant: "destructive",
+                });
+                setCoursesData([]);
+            } finally {
+                setLoading(false);
+            }
+        },
+        [isSuperadmin, orgFilter, user?.tenantId, user?.tenantName, toast]
+    );
 
     const fetchOrganizations = useCallback(async () => {
         if (!isSuperadmin) {
@@ -183,36 +212,19 @@ const AdminCoursesPage = () => {
         }
     }, [isSuperadmin]);
 
-    const fetchInstructors = useCallback(async () => {
-        try {
-            const list = await authAPI.fetchInstructorsList();
-            const raw = Array.isArray(list) ? (list as Record<string, unknown>[]) : [];
-            const scoped = isSuperadmin
-                ? raw
-                : scopeRowsToTenant(raw, user?.tenantId, user?.tenantName).rows;
-            const active = scoped
-                .map((i) => ({
-                    id: Number(i.id),
-                    name: String(i.name ?? ""),
-                    email: String(i.email ?? ""),
-                    is_active: i.is_active !== false && i.is_active !== 0,
-                }))
-                .filter((i) => i.id && i.is_active !== false) as Instructor[];
-            setInstructors(active);
-        } catch (error) {
-            console.error("Failed to fetch instructors:", error);
-            setInstructors([]);
-        }
-    }, [isSuperadmin, user?.tenantId, user?.tenantName]);
+    const loadData = useCallback(async () => {
+        const instructorList = await loadInstructors();
+        setInstructors(instructorList);
+        await fetchCourses(instructorList);
+    }, [loadInstructors, fetchCourses]);
 
     useEffect(() => {
         void fetchOrganizations();
     }, [fetchOrganizations]);
 
     useEffect(() => {
-        void fetchCourses();
-        void fetchInstructors();
-    }, [fetchCourses, fetchInstructors]);
+        void loadData();
+    }, [loadData]);
 
     useEffect(() => {
         if (!isSuperadmin || organizations.length > 0) return;
